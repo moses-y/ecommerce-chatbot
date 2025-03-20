@@ -38,8 +38,8 @@ body {
     max-width: 700px;
     width: 100%;
     background-color: #2D3748;  /* Lighter dark gray */
-    padding: 1rem;
-    border-radius: 8px;
+    padding: 0.5rem;
+    border-radius: 5px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);  /* Subtle shadow */
     color: #FFFFFF !important;  /* White text for container */
 }
@@ -49,7 +49,7 @@ body {
     max-height: 70vh;  /* Taller chat area for more visibility */
     overflow-y: auto;
     scroll-behavior: smooth;
-    padding: 1rem;
+    padding: 0.5rem;
     border-radius: 8px;
     background-color: #2D3748;  /* Dark gray background */
     color: #FFFFFF !important;  /* White text for chatbot */
@@ -60,7 +60,7 @@ body {
     background-color: #4A5568;  /* Light gray for user messages */
     border-radius: 12px 12px 0 12px;  /* Flat bottom-right corner */
     padding: 0.75rem;
-    margin-bottom: 1rem;  /* Increased spacing */
+    margin-bottom: 0.5rem;  /* Increased spacing */
     margin-left: auto;  /* Align to right */
     max-width: 80%;  /* Limit width */
     text-align: left;
@@ -102,7 +102,7 @@ input:focus, button:focus {
 .gradio-container .title {
     text-align: center;
     font-weight: 600;
-    font-size: 1.5rem;
+    font-size: 1rem;
     margin-bottom: 0.2rem;
     color: #FFFFFF !important;  /* White text */
 }
@@ -110,8 +110,8 @@ input:focus, button:focus {
 /* Subtitle styling */
 .gradio-container .subtitle {
     text-align: center;
-    font-size: 0.875rem;
-    margin-bottom: 0.5rem;
+    font-size: 0.5rem;
+    margin-bottom: 0.2rem;
     color: #E2E8F0 !important;  /* Slightly lighter white */
 }
 
