@@ -1,3 +1,14 @@
+---
+title: E-commerce Chatbot
+emoji: 🛒
+colorFrom: blue
+colorTo: green
+sdk: gradio
+sdk_version: 5.22.0
+app_file: app.py
+pinned: false
+---
+
 # E-commerce Customer Support Chatbot
 
 A conversational AI agent designed to handle e-commerce customer support inquiries, including order status checks, return policy information, and human handoff for complex issues.
