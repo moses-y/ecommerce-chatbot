@@ -39,6 +39,7 @@ ecommerce-chatbot/
 
 - Python 3.8 or higher
 - OpenAI API key
+- Gemini AI API
 
 ### Installation
 
