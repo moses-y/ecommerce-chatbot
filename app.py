@@ -21,7 +21,7 @@ custom_theme = gr.themes.Base(
     button_primary_background_fill_hover="#4f46e5",  # Darker blue on hover
 )
 
-# Updated CSS for smooth, minimalist design
+# Updated CSS for smooth, minimalist design with improved font colors
 css = """
 /* Center the entire app with padding for spaciousness */
 body {
@@ -34,7 +34,7 @@ body {
 
 /* App container with max width for better readability */
 .gradio-container {
-    max-width: 800px;
+    max-width: 700px;
     width: 100%;
     background-color: #ffffff;
     padding: 2rem;
@@ -52,21 +52,23 @@ body {
     background-color: #f8fafc;
 }
 
-/* Message styling for user and assistant */
+/* Message styling for user and assistant with updated font colors */
 .message.user {
     background-color: #e2e8f0;  /* Light gray for user messages */
-    border-radius: 12px;
+    border-radius: 5px;
     padding: 0.75rem;
     margin-bottom: 0.5rem;
     text-align: left;
+    color: #333333;  /* Dark gray for better readability */
 }
 
 .message.assistant {
     background-color: #ffffff;  /* White for assistant messages */
-    border-radius: 12px;
+    border-radius: 5px;
     padding: 0.75rem;
     margin-bottom: 0.5rem;
     text-align: left;
+    color: #83C5BE;  /* Light teal for a modern touch */
 }
 
 /* Smooth transitions for input and buttons */
@@ -74,20 +76,20 @@ input, button {
     transition: all 0.2s ease-in-out;  /* Fluid interactions */
 }
 
-/* Title and subtitle styling */
+/* Title and subtitle styling with improved font colors */
 .title {
     text-align: center;
     font-weight: 600;
     font-size: 1.5rem;  /* Smaller, minimalist font */
     margin-bottom: 0.5rem;
-    color: #334155;  /* Dark slate for readability */
+    color: #000000;  /* Black for readability */
 }
 
 .subtitle {
     text-align: center;
     font-size: 0.875rem;
     margin-bottom: 1.5rem;
-    color: #64748b;  /* Light slate for subtlety */
+    color: #333333;  /* Dark gray for readability */
 }
 """
 
