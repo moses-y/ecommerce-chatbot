@@ -8,38 +8,39 @@ from src.chatbot import chat_with_user
 
 load_dotenv()
 
-# Minimalist theme with neutral colors
+# Dark minimalist theme using Gradio's 2025 theming capabilities
 custom_theme = gr.themes.Base(
-    primary_hue="slate",      # Neutral primary color
-    secondary_hue="blue",     # Secondary color for accents
-    neutral_hue="slate",      # Neutral hues for backgrounds
-    font=["Inter", "ui-sans-serif", "system-ui", "sans-serif"],  # Simple, readable font
+    primary_hue="gray",       # Dark gray for primary elements
+    secondary_hue="blue",     # Blue for accents (buttons)
+    neutral_hue="gray",       # Dark gray for backgrounds
+    font=["Inter", "ui-sans-serif", "system-ui", "sans-serif"],  # Clean, readable font
 ).set(
-    body_background_fill="#f8fafc",  # Light background for spacious feel
-    background_fill_primary="#ffffff",  # White for main content areas
-    button_primary_background_fill="#6366f1",  # Blue for buttons
-    button_primary_background_fill_hover="#4f46e5",  # Darker blue on hover
+    body_background_fill="#1C2526",  # Dark gray background
+    background_fill_primary="#2D3748",  # Slightly lighter dark gray for main areas
+    button_primary_background_fill="#4B5EAA",  # Muted blue for buttons
+    button_primary_background_fill_hover="#3B4A8A",  # Darker blue on hover
+    text_color="#FFFFFF",  # White text for all elements
 )
 
-# Updated CSS for smooth, minimalist design with improved font colors
+# Simplified CSS for a dark minimalist design with white fonts
 css = """
 /* Center the entire app with padding for spaciousness */
 body {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 2rem;
-    background-color: #f8fafc;
+    padding: 1.5rem;
+    background-color: #1C2526;  /* Dark gray background */
 }
 
 /* App container with max width for better readability */
 .gradio-container {
     max-width: 700px;
     width: 100%;
-    background-color: #ffffff;
-    padding: 2rem;
+    background-color: #2D3748;  /* Slightly lighter dark gray */
+    padding: 1.5rem;
     border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Chatbot area with smooth scrolling */
@@ -49,26 +50,26 @@ body {
     scroll-behavior: smooth;  /* Smooth scrolling */
     padding: 1rem;
     border-radius: 8px;
-    background-color: #f8fafc;
+    background-color: #2D3748;  /* Dark gray background */
 }
 
-/* Message styling for user and assistant with updated font colors */
+/* Message styling for user and assistant with white fonts */
 #chatbot .message.user {
-    background-color: #e2e8f0;  /* Light gray for user messages */
-    border-radius: 5px;
+    background-color: #4A5568;  /* Slightly lighter gray for user messages */
+    border-radius: 8px;
     padding: 0.75rem;
     margin-bottom: 0.5rem;
     text-align: left;
-    color: #333333 !important;  /* Dark gray for better readability */
+    color: #FFFFFF !important;  /* White text for readability */
 }
 
 #chatbot .message.assistant {
-    background-color: #ffffff;  /* White for assistant messages */
-    border-radius: 5px;
+    background-color: #3B4A8A;  /* Muted blue-gray for assistant messages */
+    border-radius: 8px;
     padding: 0.75rem;
     margin-bottom: 0.5rem;
     text-align: left;
-    color: #333333 !important;  /* Dark gray for better readability */
+    color: #FFFFFF !important;  /* White text for readability */
 }
 
 /* Smooth transitions for input and buttons */
@@ -76,25 +77,27 @@ input, button {
     transition: all 0.2s ease-in-out;  /* Fluid interactions */
 }
 
-/* Ensure input text is dark for readability */
+/* Ensure input text is white for readability */
 input {
-    color: #333333 !important;  /* Dark gray text in input fields */
+    color: #FFFFFF !important;  /* White text in input fields */
+    background-color: #4A5568;  /* Dark gray background for input */
+    border: 1px solid #718096;  /* Subtle border */
 }
 
-/* Title and subtitle styling with improved font colors */
+/* Title and subtitle styling with white fonts */
 .gradio-container .title {
     text-align: center;
     font-weight: 600;
-    font-size: 1.5rem;  /* Smaller, minimalist font */
+    font-size: 1.5rem;
     margin-bottom: 0.5rem;
-    color: #000000 !important;  /* Black for readability */
+    color: #FFFFFF !important;  /* White for readability */
 }
 
 .gradio-container .subtitle {
     text-align: center;
     font-size: 0.875rem;
     margin-bottom: 1.5rem;
-    color: #333333 !important;  /* Dark gray for readability */
+    color: #E2E8F0 !important;  /* Slightly lighter white for subtitle */
 }
 """
 
@@ -138,6 +141,8 @@ with gr.Blocks(theme=custom_theme, css=css) as demo:
             "I need to speak to a human representative."
         ],
         title="",
+        stream=True,  # Enable streaming outputs for real-time rendering
+        concurrency_limit=10,  # Allow queuing for up to 10 concurrent users
     )
 
 if __name__ == "__main__":
