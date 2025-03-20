@@ -44,12 +44,16 @@ jobs:
       - uses: actions/checkout@v3
         with:
           lfs: true
-          fetch-depth: 0  # Add this to ensure a full clone
+          fetch-depth: 0  # Full clone for Hugging Face
+      - name: Set up Git LFS
+        run: |
+          git lfs install
+          git lfs fetch --all
       - name: Push to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          git remote add space https://MoeTensors:$HF_TOKEN@huggingface.co/spaces/MoeTensors/E-commerce_chatbot
+          git remote add space https://MoeTensors:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/MoeTensors/E-commerce_chatbot
           git push --force space main
