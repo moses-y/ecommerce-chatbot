@@ -28,7 +28,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 1.5rem;
+    padding: 0.5rem;
     background-color: #1C2526;  /* Dark gray background */
     color: #FFFFFF !important;  /* White text for body */
 }
@@ -38,7 +38,7 @@ body {
     max-width: 700px;
     width: 100%;
     background-color: #2D3748;  /* Lighter dark gray */
-    padding: 1.5rem;
+    padding: 1rem;
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);  /* Subtle shadow */
     color: #FFFFFF !important;  /* White text for container */
@@ -103,7 +103,7 @@ input:focus, button:focus {
     text-align: center;
     font-weight: 600;
     font-size: 1.5rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.2rem;
     color: #FFFFFF !important;  /* White text */
 }
 
@@ -111,7 +111,7 @@ input:focus, button:focus {
 .gradio-container .subtitle {
     text-align: center;
     font-size: 0.875rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.5rem;
     color: #E2E8F0 !important;  /* Slightly lighter white */
 }
 
