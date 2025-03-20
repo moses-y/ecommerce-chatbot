@@ -180,8 +180,8 @@ with gr.Blocks(theme=custom_theme, css=css) as demo:
             "I need to speak to a human representative."
         ],
         title="",
-        stream=True,  # Enable real-time streaming of responses
-        concurrency_limit=10,  # Support up to 10 concurrent users
+        type='messages',
+        concurrency_limit=10,
     )
 
 if __name__ == "__main__":
