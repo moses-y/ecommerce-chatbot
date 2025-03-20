@@ -1,5 +1,3 @@
-Below is the content you provided, formatted as a Markdown (.md) file with proper structure and styling. I've ensured it’s clean, readable, and ready to be saved as, for example, README.md in your project directory.
-markdown
 # E-commerce Customer Support Chatbot
 
 A conversational AI agent designed to handle e-commerce customer support inquiries, including order status checks, return policy information, and human handoff for complex issues.
