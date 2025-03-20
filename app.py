@@ -19,7 +19,7 @@ custom_theme = gr.themes.Base(
     background_fill_primary="#2D3748",  # Slightly lighter dark gray for main areas
     button_primary_background_fill="#4B5EAA",  # Muted blue for buttons
     button_primary_background_fill_hover="#3B4A8A",  # Darker blue on hover
-    text_color="#FFFFFF",  # White text for all elements
+    #text_color="#FFFFFF",  # White text for all elements
 )
 
 # Simplified CSS for a dark minimalist design with white fonts
