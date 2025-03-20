@@ -51,4 +51,4 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
           git remote add space https://MoeTensors:$HF_TOKEN@huggingface.co/spaces/MoeTensors/E-commerce_chatbot
-          git push --force space main
+          git push space main
