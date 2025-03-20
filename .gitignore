@@ -1,0 +1,5 @@
+.env
+project_structure.txt
+fresh_env/
+__pycache__/
+.gradio/

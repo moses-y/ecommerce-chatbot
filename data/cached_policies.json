@@ -1,0 +1,22 @@
+{
+    "standard": {
+      "days": 30,
+      "condition": "unused and in original packaging",
+      "process": "Complete the return form on our website and use the prepaid shipping label."
+    },
+    "electronics": {
+      "days": 14,
+      "condition": "unopened or defective",
+      "process": "Contact customer support for a return authorization before shipping."
+    },
+    "clothing": {
+      "days": 45,
+      "condition": "unworn with tags attached",
+      "process": "Return to any of our physical stores or ship back using our return portal."
+    },
+    "perishable": {
+      "days": 3,
+      "condition": "damaged or spoiled on arrival",
+      "process": "Take photos of the items and contact customer support immediately."
+    }
+  }
