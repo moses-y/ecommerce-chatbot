@@ -586,17 +586,16 @@ Would you like me to connect you with a customer service representative?"""
     # Direct handling of order lookups with IDs
     if not chat_state.get("order_lookup_attempted") and re.search(r'\b([a-f0-9]{32})\b', user_input):
         id_match = re.search(r'\b([a-f0-9]{32})\b', user_input)
-        order_id = id_match.group(1)
+        extracted_id = id_match.group(1)
+        print(f"Attempting direct lookup for ID: {extracted_id}")  # Debug log
 
-        # Attempt direct lookup
         try:
-            orders_df = load_order_data_cached()  # Use cached version
+            orders_df = load_order_data_cached()
             order_index, customer_index = create_order_index(orders_df)
 
-            if order_id in order_index:
-                order_data = order_index[order_id]
+            if extracted_id in order_index:
+                order_data = order_index[extracted_id]
                 status = order_data['order_status']
-
                 details = {
                     'purchase_date': order_data['order_purchase_timestamp'],
                     'delivery_date': order_data['order_delivered_customer_date'] if pd.notna(order_data['order_delivered_customer_date']) else None,
@@ -604,23 +603,20 @@ Would you like me to connect you with a customer service representative?"""
                     'estimated_delivery': order_data['order_estimated_delivery_date'] if pd.notna(order_data['order_estimated_delivery_date']) else None,
                     'actual_delivery': order_data['order_delivered_customer_date'] if pd.notna(order_data['order_delivered_customer_date']) else None
                 }
-
-                response = format_order_details(order_id, status, details)
+                response = format_order_details(extracted_id, status, details)
+                print(f"Found order {extracted_id}: {status}")  # Debug log
                 chat_state["messages"].append({"role": "assistant", "content": response})
                 chat_state["order_lookup_attempted"] = True
-                chat_state["current_order_id"] = order_id
+                chat_state["current_order_id"] = extracted_id
                 return chat_state
-
-            # Check if it's a customer ID
-            elif order_id in customer_index:
-                customer_orders = customer_index[order_id]
-
-                if len(customer_orders) == 1:
-                    # Only one order for this customer
+            elif extracted_id in customer_index:
+                customer_orders = customer_index[extracted_id]
+                order_count = len(customer_orders)
+                print(f"ID {extracted_id} identified as customer ID with {order_count} orders")  # Debug log
+                if order_count == 1:
                     order_data = customer_orders[0]
                     order_id = order_data['order_id']
                     status = order_data['order_status']
-
                     details = {
                         'purchase_date': order_data['order_purchase_timestamp'],
                         'delivery_date': order_data['order_delivered_customer_date'] if pd.notna(order_data['order_delivered_customer_date']) else None,
@@ -628,23 +624,12 @@ Would you like me to connect you with a customer service representative?"""
                         'estimated_delivery': order_data['order_estimated_delivery_date'] if pd.notna(order_data['order_estimated_delivery_date']) else None,
                         'actual_delivery': order_data['order_delivered_customer_date'] if pd.notna(order_data['order_delivered_customer_date']) else None
                     }
-
-                    response = f"I found an order for your customer ID. {format_order_details(order_id, status, details)}"
-                    chat_state["messages"].append({"role": "assistant", "content": response})
-                    chat_state["order_lookup_attempted"] = True
-                    chat_state["current_order_id"] = order_id
-                    return chat_state
+                    response = f"I found an order for customer ID {extracted_id}. {format_order_details(order_id, status, details)}"
                 else:
-                    # Multiple orders for this customer
-                    # Sort by purchase date (most recent first)
-                    sorted_orders = sorted(customer_orders,
-                                          key=lambda x: pd.to_datetime(x['order_purchase_timestamp']),
-                                          reverse=True)
-
+                    sorted_orders = sorted(customer_orders, key=lambda x: pd.to_datetime(x['order_purchase_timestamp']), reverse=True)
                     recent_order = sorted_orders[0]
                     order_id = recent_order['order_id']
                     status = recent_order['order_status']
-
                     details = {
                         'purchase_date': recent_order['order_purchase_timestamp'],
                         'delivery_date': recent_order['order_delivered_customer_date'] if pd.notna(recent_order['order_delivered_customer_date']) else None,
@@ -652,42 +637,42 @@ Would you like me to connect you with a customer service representative?"""
                         'estimated_delivery': recent_order['order_estimated_delivery_date'] if pd.notna(recent_order['order_estimated_delivery_date']) else None,
                         'actual_delivery': recent_order['order_delivered_customer_date'] if pd.notna(recent_order['order_delivered_customer_date']) else None
                     }
-
-                    response = f"I found {len(customer_orders)} orders for your customer ID. Here's the status of your most recent order: {format_order_details(order_id, status, details)}"
-                    chat_state["messages"].append({"role": "assistant", "content": response})
-                    chat_state["order_lookup_attempted"] = True
-                    chat_state["current_order_id"] = order_id
-                    return chat_state
+                    response = f"I found {order_count} orders for customer ID {extracted_id}. Here's the most recent: {format_order_details(order_id, status, details)}"
+                chat_state["messages"].append({"role": "assistant", "content": response})
+                chat_state["order_lookup_attempted"] = True
+                chat_state["current_order_id"] = order_id if order_count == 1 else None
+                return chat_state
             else:
-                response = f"I couldn't find any orders with ID {order_id}. Please check the ID and try again."
+                print(f"ID {extracted_id} not found in order_index or customer_index")  # Debug log
+                response = f"I couldn't find any orders or customers with ID {extracted_id}. Please check the ID and try again."
                 chat_state["messages"].append({"role": "assistant", "content": response})
                 chat_state["order_lookup_attempted"] = True
                 return chat_state
         except Exception as e:
-            print(f"Direct order lookup failed: {e}")
+            print(f"Direct lookup failed: {e}")  # Debug log
             # Continue with graph-based processing
 
     # Customer ID lookup without explicit order ID pattern
     if not chat_state.get("order_lookup_attempted") and any(phrase in user_input_lower for phrase in ["my customer id", "customer id", "my id", "how many orders", "my orders"]):
         # Extract potential customer ID - look for 32-char hex pattern
         id_match = re.search(r'\b([a-f0-9]{32})\b', user_input)
-
         if id_match:
             customer_id = id_match.group(1)
+            print(f"Attempting customer ID lookup for ID: {customer_id}")  # Debug log
 
             try:
-                orders_df = load_order_data_cached()  # Use cached version
+                orders_df = load_order_data_cached()
                 order_index, customer_index = create_order_index(orders_df)
 
                 if customer_id in customer_index:
                     customer_orders = customer_index[customer_id]
                     order_count = len(customer_orders)
+                    print(f"Found {order_count} orders for customer ID {customer_id}")  # Debug log
 
                     if order_count == 1:
                         order_data = customer_orders[0]
                         order_id = order_data['order_id']
                         status = order_data['order_status']
-
                         details = {
                             'purchase_date': order_data['order_purchase_timestamp'],
                             'delivery_date': order_data['order_delivered_customer_date'] if pd.notna(order_data['order_delivered_customer_date']) else None,
@@ -695,37 +680,27 @@ Would you like me to connect you with a customer service representative?"""
                             'estimated_delivery': order_data['order_estimated_delivery_date'] if pd.notna(order_data['order_estimated_delivery_date']) else None,
                             'actual_delivery': order_data['order_delivered_customer_date'] if pd.notna(order_data['order_delivered_customer_date']) else None
                         }
-
                         response = f"You have 1 order with customer ID {customer_id}. Here are the details: {format_order_details(order_id, status, details)}"
                     else:
-                        # List all orders with basic info
                         response = f"You have {order_count} orders with customer ID {customer_id}. Here's a summary:\n\n"
-
-                        # Sort by purchase date (most recent first)
-                        sorted_orders = sorted(customer_orders,
-                                              key=lambda x: pd.to_datetime(x['order_purchase_timestamp']),
-                                              reverse=True)
-
-                        for i, order in enumerate(sorted_orders[:5]):  # Show up to 5 most recent orders
-                            response += f"{i+1}. Order ID: {order['order_id']}\n"
-                            response += f"   Status: {order['order_status']}\n"
-                            response += f"   Purchased: {order['order_purchase_timestamp']}\n"
+                        sorted_orders = sorted(customer_orders, key=lambda x: pd.to_datetime(x['order_purchase_timestamp']), reverse=True)
+                        for i, order in enumerate(sorted_orders[:5]):
+                            response += f"{i+1}. Order ID: {order['order_id']}\n   Status: {order['order_status']}\n   Purchased: {order['order_purchase_timestamp']}\n"
                             if i < len(sorted_orders) - 1:
                                 response += "\n"
-
                         if order_count > 5:
                             response += f"\nShowing 5 most recent orders out of {order_count} total."
-
                     chat_state["messages"].append({"role": "assistant", "content": response})
                     chat_state["order_lookup_attempted"] = True
                     return chat_state
                 else:
+                    print(f"Customer ID {customer_id} not found in customer_index")  # Debug log
                     response = f"I couldn't find any orders with customer ID {customer_id}. Please check the ID and try again."
                     chat_state["messages"].append({"role": "assistant", "content": response})
                     chat_state["order_lookup_attempted"] = True
                     return chat_state
             except Exception as e:
-                print(f"Customer ID lookup failed: {e}")
+                print(f"Customer ID lookup failed: {e}")  # Debug log
                 # Continue with graph-based processing
 
     # General order status question without specific ID

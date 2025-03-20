@@ -1,4 +1,4 @@
-# System prompt for the chatbot
+# System prompt for the chatbot config.py
 import os
 import sys
 # Add the project root to the Python path
