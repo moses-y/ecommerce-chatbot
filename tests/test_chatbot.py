@@ -1,4 +1,5 @@
 # test_chatbot.py
+# test_chatbot.py
 import os
 import sys
 import unittest
@@ -117,19 +118,19 @@ class TestChatbot(unittest.TestCase):
         self.assertFalse(result["contact_info_collected"])
         self.assertIn("human representative", result["messages"][1]["content"])
 
-    @patch('src.utils.load_order_data')
+    @patch('src.utils.pd.read_csv')
     def test_load_order_data(self, mock_pd_read_csv):
         """Test loading order data."""
-        # Mock pandas read_csv
+        # Mock pandas read_csv to return our sample data
         mock_pd_read_csv.return_value = self.sample_orders
 
         # Test with cache enabled
         result = load_order_data(use_cache=True)
-        self.assertEqual(len(result), len(self.sample_orders))
+        self.assertEqual(len(result), 2)  # Our sample has 2 rows
 
         # Test with cache disabled
         result = load_order_data(use_cache=False)
-        self.assertEqual(len(result), len(self.sample_orders))
+        self.assertEqual(len(result), 2)  # Our sample has 2 rows
 
 if __name__ == '__main__':
     unittest.main()
