@@ -37,18 +37,18 @@ jobs:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
 
   deploy:
-  needs: test
-  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0  # Full clone, no LFS needed
-    - name: Push to Hugging Face
-      env:
-        HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      run: |
-        git config --global user.email "actions@github.com"
-        git config --global user.name "GitHub Actions"
-        git remote add space https://MoeTensors:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/MoeTensors/E-commerce_chatbot
-        git push --force space main
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Full clone, no LFS needed
+      - name: Push to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git remote add space https://MoeTensors:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/MoeTensors/E-commerce_chatbot
+          git push --force space main
