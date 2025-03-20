@@ -53,22 +53,22 @@ body {
 }
 
 /* Message styling for user and assistant with updated font colors */
-.message.user {
+#chatbot .message.user {
     background-color: #e2e8f0;  /* Light gray for user messages */
     border-radius: 5px;
     padding: 0.75rem;
     margin-bottom: 0.5rem;
     text-align: left;
-    color: #333333;  /* Dark gray for better readability */
+    color: #333333 !important;  /* Dark gray for better readability */
 }
 
-.message.assistant {
+#chatbot .message.assistant {
     background-color: #ffffff;  /* White for assistant messages */
     border-radius: 5px;
     padding: 0.75rem;
     margin-bottom: 0.5rem;
     text-align: left;
-    color: #83C5BE;  /* Light teal for a modern touch */
+    color: #333333 !important;  /* Dark gray for better readability */
 }
 
 /* Smooth transitions for input and buttons */
@@ -76,20 +76,25 @@ input, button {
     transition: all 0.2s ease-in-out;  /* Fluid interactions */
 }
 
+/* Ensure input text is dark for readability */
+input {
+    color: #333333 !important;  /* Dark gray text in input fields */
+}
+
 /* Title and subtitle styling with improved font colors */
-.title {
+.gradio-container .title {
     text-align: center;
     font-weight: 600;
     font-size: 1.5rem;  /* Smaller, minimalist font */
     margin-bottom: 0.5rem;
-    color: #000000;  /* Black for readability */
+    color: #000000 !important;  /* Black for readability */
 }
 
-.subtitle {
+.gradio-container .subtitle {
     text-align: center;
     font-size: 0.875rem;
     margin-bottom: 1.5rem;
-    color: #333333;  /* Dark gray for readability */
+    color: #333333 !important;  /* Dark gray for readability */
 }
 """
 
