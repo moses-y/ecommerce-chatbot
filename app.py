@@ -21,7 +21,7 @@ custom_theme = gr.themes.Base(
     button_primary_background_fill_hover="#3B4A8A"  # Darker blue on hover
 )
 
-# Custom CSS to ensure white text and refine the UI
+# Updated CSS for a professional and user-friendly interface
 css = """
 /* Center the app with padding for a spacious feel */
 body {
@@ -33,20 +33,20 @@ body {
     color: #FFFFFF !important;  /* White text for body */
 }
 
-/* Style the app container */
+/* Style the app container with subtle shadow for depth */
 .gradio-container {
     max-width: 700px;
     width: 100%;
     background-color: #2D3748;  /* Lighter dark gray */
     padding: 1.5rem;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);  /* Subtle shadow */
     color: #FFFFFF !important;  /* White text for container */
 }
 
-/* Chatbot area with smooth scrolling */
+/* Chatbot area with increased height and smooth scrolling */
 #chatbot {
-    max-height: 60vh;
+    max-height: 70vh;  /* Taller chat area for more visibility */
     overflow-y: auto;
     scroll-behavior: smooth;
     padding: 1rem;
@@ -55,22 +55,26 @@ body {
     color: #FFFFFF !important;  /* White text for chatbot */
 }
 
-/* User message styling */
+/* User message styling with right alignment and speech bubble effect */
 #chatbot .message.user {
     background-color: #4A5568;  /* Light gray for user messages */
-    border-radius: 8px;
+    border-radius: 12px 12px 0 12px;  /* Flat bottom-right corner */
     padding: 0.75rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: 1rem;  /* Increased spacing */
+    margin-left: auto;  /* Align to right */
+    max-width: 80%;  /* Limit width */
     text-align: left;
     color: #FFFFFF !important;  /* White text */
 }
 
-/* Assistant message styling */
+/* Assistant message styling with left alignment and speech bubble effect */
 #chatbot .message.assistant {
     background-color: #3B4A8A;  /* Muted blue-gray for assistant messages */
-    border-radius: 8px;
+    border-radius: 12px 12px 12px 0;  /* Flat bottom-left corner */
     padding: 0.75rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: 1rem;  /* Increased spacing */
+    margin-right: auto;  /* Align to left */
+    max-width: 80%;  /* Limit width */
     text-align: left;
     color: #FFFFFF !important;  /* White text */
 }
@@ -80,11 +84,18 @@ input, button {
     transition: all 0.2s ease-in-out;  /* Fluid interactions */
 }
 
-/* Style input fields */
+/* Style input fields with more padding */
 input {
     color: #FFFFFF !important;  /* White text in inputs */
     background-color: #4A5568;  /* Dark gray background */
     border: 1px solid #718096;  /* Subtle border */
+    padding: 0.5rem;  /* Increased padding for comfort */
+}
+
+/* Focus styles for accessibility */
+input:focus, button:focus {
+    outline: 2px solid #4B5EAA;  /* Blue outline on focus */
+    outline-offset: 2px;
 }
 
 /* Title styling */
@@ -107,6 +118,25 @@ input {
 /* Ensure all text is white */
 * {
     color: #FFFFFF !important;
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 600px) {
+    body {
+        padding: 0.5rem;  /* Reduced padding */
+    }
+    .gradio-container {
+        padding: 1rem;
+    }
+    #chatbot {
+        max-height: 50vh;  /* Shorter chat area on mobile */
+    }
+    .title {
+        font-size: 1.25rem;  /* Smaller title */
+    }
+    .subtitle {
+        font-size: 0.75rem;  /* Smaller subtitle */
+    }
 }
 """
 
