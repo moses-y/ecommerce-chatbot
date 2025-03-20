@@ -25,7 +25,7 @@ load_dotenv()
 
 # Import local modules
 from src.config import SYSTEM_PROMPT, ORDER_STATUS_DESCRIPTIONS, API_CONFIG
-from utils import load_order_data, get_order_status, format_order_details, create_order_index
+from src.utils import load_order_data, get_order_status, format_order_details, create_order_index
 
 from functools import lru_cache
 
