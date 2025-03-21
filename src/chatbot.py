@@ -1,13 +1,15 @@
 # Description: E-commerce support chatbot.py using a state graph for conversation management.
 import os
 import sys
-# Add the project root to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import time
-import pandas as pd
 import json
-import warnings
 import re
+import warnings
+import numpy as np
+import pandas as pd
+import chromadb
+import google.generativeai as genai
+from functools import lru_cache
 from typing import Dict, List, Any, Optional, TypedDict
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
@@ -17,16 +19,245 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
 
+# Add the project root to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Filter warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="langchain_google_genai")
 
 # Load environment variables
 load_dotenv()
 
+# Configure Gemini API
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
 # Import local modules
 from src.config import SYSTEM_PROMPT, ORDER_STATUS_DESCRIPTIONS, API_CONFIG
-from src.utils import load_order_data, get_order_status, format_order_details, create_order_index
+from src.utils import load_order_data, get_order_status, format_order_details, create_order_index, initialize_vector_db
+from src.vector_db import (
+    query_vector_db,
+    get_order_by_id,
+    get_orders_by_customer_id,
+    cached_get_order_by_id,
+    cached_get_orders_by_customer_id
+)
 
+class GeminiEmbeddingFunction:
+    """Custom embedding function using Gemini API"""
+    def __call__(self, input_texts):
+        """Generate embeddings for a list of texts"""
+        if not input_texts:
+            return []
+
+        # Clean and prepare texts
+        cleaned_texts = [text.strip() for text in input_texts if text and text.strip()]
+        if not cleaned_texts:
+            return []
+
+        try:
+            # Use Gemini embedding model
+            model = "models/embedding-001"
+            embeddings = []
+
+            # Process texts in batches to avoid API limits
+            batch_size = 10
+            for i in range(0, len(cleaned_texts), batch_size):
+                batch = cleaned_texts[i:i+batch_size]
+                batch_embeddings = [
+                    genai.embed_content(model=model, content=text)["embedding"]
+                    for text in batch
+                ]
+                embeddings.extend(batch_embeddings)
+
+            return embeddings
+        except Exception as e:
+            print(f"Error generating embeddings: {e}")
+            # Return zero embeddings as fallback
+            return [np.zeros(768) for _ in cleaned_texts]
+
+def create_order_vector_db(orders_df: pd.DataFrame, db_path: str = "./data/vector_db") -> chromadb.Collection:
+    """
+    Create a vector database from order data.
+
+    Args:
+        orders_df: DataFrame containing order data
+        db_path: Path to store the vector database
+
+    Returns:
+        ChromaDB collection with order data
+    """
+    # Ensure directory exists
+    os.makedirs(db_path, exist_ok=True)
+
+    # Initialize ChromaDB client
+    client = chromadb.PersistentClient(path=db_path)
+
+    # Create or get collection
+    try:
+        collection = client.get_collection(
+            name="orders",
+            embedding_function=GeminiEmbeddingFunction()
+        )
+        print("Using existing vector database")
+    except ValueError:
+        # Collection doesn't exist, create it
+        collection = client.create_collection(
+            name="orders",
+            embedding_function=GeminiEmbeddingFunction()
+        )
+        print("Creating new vector database")
+
+        # Prepare data for insertion
+        documents = []
+        metadatas = []
+        ids = []
+
+        for idx, row in orders_df.iterrows():
+            # Create a text representation of the order for embedding
+            order_text = f"""
+            Order ID: {row['order_id']}
+            Customer ID: {row.get('customer_id', 'Unknown')}
+            Status: {row['order_status']}
+            Purchase Date: {row['order_purchase_timestamp']}
+            """
+
+            # Add optional fields if available
+            if pd.notna(row.get('order_approved_at')):
+                order_text += f"Approved Date: {row['order_approved_at']}\n"
+            if pd.notna(row.get('order_delivered_carrier_date')):
+                order_text += f"Carrier Delivery Date: {row['order_delivered_carrier_date']}\n"
+            if pd.notna(row.get('order_delivered_customer_date')):
+                order_text += f"Customer Delivery Date: {row['order_delivered_customer_date']}\n"
+            if pd.notna(row.get('order_estimated_delivery_date')):
+                order_text += f"Estimated Delivery Date: {row['order_estimated_delivery_date']}\n"
+
+            # Store the document, metadata, and ID
+            documents.append(order_text)
+            metadatas.append({
+                "order_id": row['order_id'],
+                "customer_id": str(row.get('customer_id', '')),
+                "status": row['order_status'],
+                "purchase_date": row['order_purchase_timestamp']
+            })
+            ids.append(str(idx))
+
+            # Add in batches to avoid memory issues
+            if len(documents) >= 1000:
+                collection.add(
+                    documents=documents,
+                    metadatas=metadatas,
+                    ids=ids
+                )
+                documents = []
+                metadatas = []
+                ids = []
+
+        # Add any remaining documents
+        if documents:
+            collection.add(
+                documents=documents,
+                metadatas=metadatas,
+                ids=ids
+            )
+
+    return collection
+
+def query_vector_db(query: str, collection: chromadb.Collection, top_k: int = 5) -> List[Dict[str, Any]]:
+    """
+    Query the vector database for relevant orders.
+
+    Args:
+        query: User query text
+        collection: ChromaDB collection to query
+        top_k: Number of results to return
+
+    Returns:
+        List of relevant order data
+    """
+    try:
+        # Query the collection
+        results = collection.query(
+            query_texts=[query],
+            n_results=top_k
+        )
+
+        # Format results
+        formatted_results = []
+        for i in range(len(results["ids"][0])):
+            formatted_results.append({
+                "id": results["ids"][0][i],
+                "metadata": results["metadatas"][0][i],
+                "document": results["documents"][0][i],
+                "distance": results["distances"][0][i] if "distances" in results else None
+            })
+
+        return formatted_results
+    except Exception as e:
+        print(f"Error querying vector database: {e}")
+        return []
+
+def get_order_by_id(order_id: str, collection: chromadb.Collection) -> Dict[str, Any]:
+    """
+    Get order details by order ID.
+
+    Args:
+        order_id: Order ID to look up
+        collection: ChromaDB collection to query
+
+    Returns:
+        Order details or None if not found
+    """
+    try:
+        # Query by metadata
+        results = collection.query(
+            query_texts=[""],
+            where={"order_id": order_id},
+            n_results=1
+        )
+
+        if results["ids"][0]:
+            return {
+                "id": results["ids"][0][0],
+                "metadata": results["metadatas"][0][0],
+                "document": results["documents"][0][0]
+            }
+        return None
+    except Exception as e:
+        print(f"Error getting order by ID: {e}")
+        return None
+
+def get_orders_by_customer_id(customer_id: str, collection: chromadb.Collection) -> List[Dict[str, Any]]:
+    """
+    Get all orders for a customer.
+
+    Args:
+        customer_id: Customer ID to look up
+        collection: ChromaDB collection to query
+
+    Returns:
+        List of order details
+    """
+    try:
+        # Query by metadata
+        results = collection.query(
+            query_texts=[""],
+            where={"customer_id": customer_id},
+            n_results=100  # Set a high limit to get all orders
+        )
+
+        formatted_results = []
+        for i in range(len(results["ids"][0])):
+            formatted_results.append({
+                "id": results["ids"][0][i],
+                "metadata": results["metadatas"][0][i],
+                "document": results["documents"][0][i]
+            })
+
+        return formatted_results
+    except Exception as e:
+        print(f"Error getting orders by customer ID: {e}")
+        return []
+from src.vector_db import query_vector_db, get_order_by_id, get_orders_by_customer_id
 from functools import lru_cache
 
 # Cached version of load_order_data
@@ -72,45 +303,29 @@ def create_chatbot():
 
     # Load order data
     orders_df = load_order_data_cached()
+
+    # Initialize vector database
+    vector_collection = initialize_vector_db(orders_df)
+
     # Create indexes for faster lookups
     order_index, customer_index = create_order_index(orders_df)
 
     # Define nodes
+    
     def lookup_order(state: ChatbotState) -> ChatbotState:
         """Extract order ID or customer ID and look up status."""
+        start_time = time.time()
         last_message = state["messages"][-1]["content"]
 
-        # Simple regex pattern to extract order ID or customer ID (alphanumeric string of appropriate length)
+        # Simple regex pattern to extract order ID or customer ID
         id_match = re.search(r'\b([a-f0-9]{32})\b', last_message)
 
         if id_match:
             extracted_id = id_match.group(1)
-        else:
-            # Use LLM to extract ID as fallback
-            try:
-                extract_prompt = ChatPromptTemplate.from_messages([
-                    ("system", "Extract the order ID or customer ID from the user message. If no clear ID is found, respond with 'NO_ID'."),
-                    ("human", last_message)
-                ])
-
-                id_chain = extract_prompt | llm | StrOutputParser()
-                extracted_id = id_chain.invoke({}).strip()
-            except Exception as e:
-                print(f"Error extracting ID: {e}")
-                extracted_id = "NO_ID"
-
-        if extracted_id == "NO_ID":
-            response = "I'd be happy to help check your order status. Could you please provide your order ID or customer ID? It should be a 32-character alphanumeric code."
-        else:
-            # Clean up potential ID format
-            extracted_id = extracted_id.replace("#", "").strip()
-
-            # Check if it's an order ID
+            # Try direct dictionary lookup first (fastest)
             if extracted_id in order_index:
                 order_data = order_index[extracted_id]
                 status = order_data['order_status']
-
-                # Format the details
                 details = {
                     'purchase_date': order_data['order_purchase_timestamp'],
                     'delivery_date': order_data['order_delivered_customer_date'] if pd.notna(order_data['order_delivered_customer_date']) else None,
@@ -118,19 +333,14 @@ def create_chatbot():
                     'estimated_delivery': order_data['order_estimated_delivery_date'] if pd.notna(order_data['order_estimated_delivery_date']) else None,
                     'actual_delivery': order_data['order_delivered_customer_date'] if pd.notna(order_data['order_delivered_customer_date']) else None
                 }
-
                 response = format_order_details(extracted_id, status, details)
-
-            # Check if it's a customer ID
             elif extracted_id in customer_index:
+                # Use direct dictionary access for customer lookup
                 customer_orders = customer_index[extracted_id]
-
                 if len(customer_orders) == 1:
-                    # Only one order for this customer
                     order_data = customer_orders[0]
                     order_id = order_data['order_id']
                     status = order_data['order_status']
-
                     details = {
                         'purchase_date': order_data['order_purchase_timestamp'],
                         'delivery_date': order_data['order_delivered_customer_date'] if pd.notna(order_data['order_delivered_customer_date']) else None,
@@ -138,19 +348,14 @@ def create_chatbot():
                         'estimated_delivery': order_data['order_estimated_delivery_date'] if pd.notna(order_data['order_estimated_delivery_date']) else None,
                         'actual_delivery': order_data['order_delivered_customer_date'] if pd.notna(order_data['order_delivered_customer_date']) else None
                     }
-
                     response = f"I found an order for your customer ID. {format_order_details(order_id, status, details)}"
                 else:
-                    # Multiple orders for this customer
-                    # Sort by purchase date (most recent first)
                     sorted_orders = sorted(customer_orders,
-                                          key=lambda x: pd.to_datetime(x['order_purchase_timestamp']),
-                                          reverse=True)
-
+                                        key=lambda x: pd.to_datetime(x['order_purchase_timestamp']),
+                                        reverse=True)
                     recent_order = sorted_orders[0]
                     order_id = recent_order['order_id']
                     status = recent_order['order_status']
-
                     details = {
                         'purchase_date': recent_order['order_purchase_timestamp'],
                         'delivery_date': recent_order['order_delivered_customer_date'] if pd.notna(recent_order['order_delivered_customer_date']) else None,
@@ -158,25 +363,104 @@ def create_chatbot():
                         'estimated_delivery': recent_order['order_estimated_delivery_date'] if pd.notna(recent_order['order_estimated_delivery_date']) else None,
                         'actual_delivery': recent_order['order_delivered_customer_date'] if pd.notna(recent_order['order_delivered_customer_date']) else None
                     }
-
                     response = f"I found {len(customer_orders)} orders for your customer ID. Here's the status of your most recent order: {format_order_details(order_id, status, details)}"
             else:
-                response = f"I couldn't find any orders with ID {extracted_id}. Please check the ID and try again."
+                # Fall back to vector search using cached functions
+                from src.vector_db import cached_get_order_by_id, cached_get_orders_by_customer_id
+
+                # Try order ID first
+                order_result = cached_get_order_by_id(extracted_id, vector_collection)
+                if order_result:
+                    metadata = order_result["metadata"]
+                    status = metadata["status"]
+                    details = {
+                        'purchase_date': metadata['purchase_date'],
+                        'delivery_date': metadata.get('customer_delivery_date'),
+                        'approved_date': metadata.get('approved_date'),
+                        'estimated_delivery': metadata.get('estimated_delivery_date'),
+                        'actual_delivery': metadata.get('customer_delivery_date')
+                    }
+                    response = format_order_details(extracted_id, status, details)
+                else:
+                    # Try customer ID
+                    customer_orders = cached_get_orders_by_customer_id(extracted_id, vector_collection)
+                    if customer_orders:
+                        if len(customer_orders) == 1:
+                            metadata = customer_orders[0]["metadata"]
+                            order_id = metadata["order_id"]
+                            status = metadata["status"]
+                            details = {
+                                'purchase_date': metadata['purchase_date'],
+                                'delivery_date': metadata.get('customer_delivery_date'),
+                                'approved_date': metadata.get('approved_date'),
+                                'estimated_delivery': metadata.get('estimated_delivery_date'),
+                                'actual_delivery': metadata.get('customer_delivery_date')
+                            }
+                            response = f"I found an order for your customer ID. {format_order_details(order_id, status, details)}"
+                        else:
+                            response = f"I found {len(customer_orders)} orders for your customer ID. Here's the most recent one: "
+                            sorted_orders = sorted(customer_orders,
+                                                key=lambda x: pd.to_datetime(x["metadata"]['purchase_date']),
+                                                reverse=True)
+                            metadata = sorted_orders[0]["metadata"]
+                            order_id = metadata["order_id"]
+                            status = metadata["status"]
+                            details = {
+                                'purchase_date': metadata['purchase_date'],
+                                'delivery_date': metadata.get('customer_delivery_date'),
+                                'approved_date': metadata.get('approved_date'),
+                                'estimated_delivery': metadata.get('estimated_delivery_date'),
+                                'actual_delivery': metadata.get('customer_delivery_date')
+                            }
+                            response += format_order_details(order_id, status, details)
+                    else:
+                        response = f"I couldn't find any orders with ID {extracted_id}. Please check the ID and try again."
+        else:
+            # No ID found in message
+            response = "I'd be happy to help check your order status. Could you please provide your order ID or customer ID? It should be a 32-character alphanumeric code."
+
+        print(f"Lookup completed in {time.time() - start_time:.4f} seconds")
 
         new_state = state.copy()
         new_state["messages"].append({"role": "assistant", "content": response})
         new_state["order_lookup_attempted"] = True
-        new_state["current_order_id"] = extracted_id if extracted_id != "NO_ID" else None
+        new_state["current_order_id"] = extracted_id if 'extracted_id' in locals() and extracted_id != "NO_ID" else None
         return new_state
+
 
     def collect_contact_info(state: ChatbotState) -> ChatbotState:
         """Collect customer contact information for human handoff and save to CSV."""
         new_state = state.copy()
         last_message = state["messages"][-1]["content"]
+        last_message_lower = last_message.lower()
+
+        # Check if user is trying to do something else instead
+        cancel_keywords = ["cancel", "nevermind", "never mind", "stop", "go back"]
+        customer_id_keywords = ["customer id", "my id", "delivery status", "order status", "track"]
+
+        if any(keyword in last_message_lower for keyword in cancel_keywords) or any(keyword in last_message_lower for keyword in customer_id_keywords):
+            # Reset the human agent flow
+            new_state["needs_human_agent"] = False
+            new_state["contact_step"] = 0
+
+            # If they're asking about customer ID specifically
+            if any(keyword in last_message_lower for keyword in customer_id_keywords):
+                new_state["messages"].append({
+                    "role": "assistant",
+                    "content": "I understand you'd like to check your order status using your customer ID. Could you please provide your customer ID? It should be a 32-character alphanumeric code."
+                })
+                return new_state
+            else:
+                new_state["messages"].append({
+                    "role": "assistant",
+                    "content": "I've canceled the request to speak with a human representative. How else can I help you today?"
+                })
+                return new_state
 
         # Initialize contact_step if not present
         if "contact_step" not in new_state:
             new_state["contact_step"] = 0
+
 
         # Get current step
         step = new_state["contact_step"]
@@ -306,16 +590,43 @@ def create_chatbot():
         # Update state
         new_state["messages"].append({"role": "assistant", "content": response_text})
         return new_state
+    
+    def connect_to_agent(state: ChatbotState) -> ChatbotState:
+        """Immediately connect to a human agent without collecting contact info."""
+        new_state = state.copy()
+
+        # Add a direct connection message
+        new_state["messages"].append({
+            "role": "assistant",
+            "content": "I'm connecting you to a human representative now. Please hold while I transfer your chat. A customer service agent will be with you shortly."
+        })
+
+        # Mark as needing human agent but skip contact collection
+        new_state["needs_human_agent"] = True
+        new_state["contact_info_collected"] = True  # Skip collection
+
+        return new_state
 
     # Define the router function
     def router(state: ChatbotState):
         """Central routing function to determine next node."""
+        # Check for human agent requests first - this should take priority
+        last_message = state["messages"][-1]["content"].lower()
+        human_keywords = ["speak to a human", "talk to a human", "human representative",
+                        "real person", "speak to an agent", "talk to a representative",
+                        "connect me with a human", "human agent please", "agent", "representative"]
+
+        if any(keyword in last_message for keyword in human_keywords) and not state["needs_human_agent"]:
+            # Set flag for human agent
+            state["needs_human_agent"] = True
+            state["contact_step"] = 0
+            return "collect_contact_info"
+
         # Check if we need to collect contact info for human handoff
         if state["needs_human_agent"] and not state["contact_info_collected"]:
             return "collect_contact_info"
 
         # Check if we should end the conversation
-        last_message = state["messages"][-1]["content"].lower()
         if "bye" in last_message or "thank you" in last_message or "thanks" in last_message:
             return END
 
@@ -342,6 +653,7 @@ def create_chatbot():
 
     # Add nodes
     workflow.add_node("lookup_order", lookup_order)
+    workflow.add_node("connect_to_agent", connect_to_agent)
     workflow.add_node("collect_contact_info", collect_contact_info)
     workflow.add_node("continue_conversation", continue_conversation)
 
@@ -375,8 +687,26 @@ def chat_with_user(user_input: str, chat_state: Optional[Dict] = None) -> Dict:
     # Add user message to state
     chat_state["messages"].append({"role": "user", "content": user_input})
 
-    # Check for FAQs first - no need to call API for these
+    # Check if user wants to cancel human agent request
     user_input_lower = user_input.lower()
+    if chat_state.get("needs_human_agent") and not chat_state.get("contact_info_collected"):
+        cancel_keywords = ["cancel", "nevermind", "never mind", "stop", "go back", "different question"]
+        customer_id_keywords = ["customer id", "my id", "delivery status", "order status", "track"]
+
+        if any(keyword in user_input_lower for keyword in cancel_keywords) or any(keyword in user_input_lower for keyword in customer_id_keywords):
+            # Reset the human agent flow
+            chat_state["needs_human_agent"] = False
+            chat_state["contact_step"] = 0
+
+            # If they're asking about customer ID specifically
+            if any(keyword in user_input_lower for keyword in customer_id_keywords):
+                response = "I understand you'd like to check your order status using your customer ID. Could you please provide your customer ID? It should be a 32-character alphanumeric code."
+                chat_state["messages"].append({"role": "assistant", "content": response})
+                return chat_state
+            else:
+                response = "I've canceled the request to speak with a human representative. How else can I help you today?"
+                chat_state["messages"].append({"role": "assistant", "content": response})
+                return chat_state
 
     # Return policy FAQ
     if any(phrase in user_input_lower for phrase in ["return policy", "policy on return", "can i return",
@@ -493,7 +823,7 @@ Customer Service Hours:
 - Saturday: 9:00 AM - 6:00 PM EST
 - Sunday: 10:00 AM - 5:00 PM EST
 
-Phone: 1-800-123-4567
+Phone: +1-800-123-4567
 Email: support@ecommerce-example.com
 Live Chat: Available on our website during business hours
 
@@ -504,10 +834,11 @@ Would you like me to connect you with a customer service representative?"""
         chat_state["messages"].append({"role": "assistant", "content": response})
         return chat_state
 
-    # More precise detection of human agent requests
+    # More precise detection of human agent requests - expanded keywords
     human_keywords = ["speak to a human", "talk to a human", "human representative",
-                     "real person", "speak to an agent", "talk to a representative",
-                     "connect me with a human", "human agent please"]
+                    "real person", "speak to an agent", "talk to a representative",
+                    "connect me with a human", "human agent please", "agent", "representative",
+                    "connect me to an agent", "need an agent", "talk to agent", "speak to agent"]
 
     # Check for specific phrases first
     needs_human = False
@@ -524,13 +855,13 @@ Would you like me to connect you with a customer service representative?"""
         if any(word in user_input_lower.split() for word in standalone_words) and not any(policy_word in user_input_lower for policy_word in ["policy", "policies", "return", "shipping", "warranty"]):
             needs_human = True
 
-    # Direct handling of human agent requests with improved detection
-    if needs_human and not chat_state.get("needs_human_agent"):
+    #Direct handling of human agent requests with improved detection
+    if any(keyword in user_input_lower for keyword in human_keywords) and not chat_state.get("needs_human_agent"):
         chat_state["needs_human_agent"] = True
         chat_state["contact_step"] = 0  # Reset step counter
         chat_state["messages"].append({
             "role": "assistant",
-            "content": "I understand you'd like to speak with a human representative. Could you please provide your name?"
+            "content": "I'll connect you with a human representative. Could you please provide your name?"
         })
         chat_state["contact_step"] = 1  # Move to next step
         return chat_state

@@ -8,6 +8,7 @@ import json
 from typing import Tuple, Dict, Any, Optional
 from datetime import datetime
 from config import ORDER_STATUS_DESCRIPTIONS
+from src.vector_db import create_order_vector_db, query_vector_db, get_order_by_id, get_orders_by_customer_id
 
 def load_order_data(use_cache: bool = True) -> pd.DataFrame:
     """
@@ -203,3 +204,16 @@ def load_return_policies(use_cache: bool = True) -> Dict[str, Any]:
         json.dump(policies, f, indent=2)
 
     return policies
+
+# Add this to the end of your utils.py file
+def initialize_vector_db(orders_df=None):
+    """Initialize the vector database with order data."""
+    if orders_df is None:
+        orders_df = load_order_data(use_cache=True)
+
+    # Import here to avoid circular imports
+    from src.vector_db import create_order_vector_db
+
+    # Create or load the vector database
+    collection = create_order_vector_db(orders_df)
+    return collection

@@ -1,3 +1,4 @@
+# Add to app.py before creating the Gradio interface
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -5,6 +6,12 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import gradio as gr
 from dotenv import load_dotenv
 from src.chatbot import chat_with_user
+from src.utils import initialize_vector_db
+import time
+print("Initializing vector database...")
+start_time = time.time()
+
+print(f"Vector database initialized in {time.time() - start_time:.2f} seconds")
 
 load_dotenv()
 
