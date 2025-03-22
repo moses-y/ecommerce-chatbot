@@ -179,7 +179,7 @@ with gr.Blocks(theme=custom_theme, css=css) as demo:
 
     chatbot = gr.ChatInterface(
         respond,
-        chatbot=gr.Chatbot(elem_id="chatbot", show_copy_button=True),
+        chatbot=gr.Chatbot(elem_id="chatbot", show_copy_button=True, type="messages"),
         examples=[
             "What's the status of my order e481f51cbdc54678b7cc49136f2d6af7?",
             "What is the status of my order e69bfb5eb88e0ed6a785585b27e16dbf?",
@@ -187,7 +187,7 @@ with gr.Blocks(theme=custom_theme, css=css) as demo:
             "I need to speak to a human representative."
         ],
         title="",
-        type='messages',
+        stream=True,
         concurrency_limit=10,
     )
 
