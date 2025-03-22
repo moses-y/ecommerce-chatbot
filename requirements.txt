@@ -6,7 +6,7 @@ langchain-core==0.3.47
 langgraph==0.3.18
 langchain-openai==0.3.9
 langchain-google-genai==2.1.1
-google-ai-generativelanguage==0.6.15
+google-ai-generativelanguage==0.6.16
 pytest==7.4.0
 gradio==5.22.0
 matplotlib
