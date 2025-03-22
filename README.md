@@ -90,7 +90,7 @@ uv pip install numpy==1.26.4
 python -c "import numpy; print(numpy.__version__)"
 
 # Install other dependencies
-uv pip install python-dotenv==1.0.1 langchain==0.3.0 langchain-core==0.3.46 langgraph==0.3.14 langchain-openai==0.3.9 langchain-google-genai==2.1.0 google-ai-generativelanguage==0.6.17 pytest==7.4.0 gradio==5.22.0
+uv pip install python-dotenv==1.0.1 langchain==0.3.0 langchain-core==0.3.46 langgraph==0.3.14 langchain-openai==0.3.9 langchain-google-genai==2.1.0 google-ai-generativelanguage==0.6.15  google-ai-generativelanguage==0.6.16 pytest==7.4.0 gradio==5.22.0
 
 # Install pandas last
 - uv pip install pandas==2.2.3
