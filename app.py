@@ -187,7 +187,7 @@ with gr.Blocks(theme=custom_theme, css=css) as demo:
             "I need to speak to a human representative."
         ],
         title="",
-        stream=True,
+        #stream=True,
         concurrency_limit=10,
     )
 
