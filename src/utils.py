@@ -1,15 +1,19 @@
-# utils.py
+# src/utils.py
 import os
 import sys
-# Add the project root to the Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import pandas as pd
 import json
 from typing import Tuple, Dict, Any, Optional
 from datetime import datetime
-from config import ORDER_STATUS_DESCRIPTIONS
-from src.vector_db import create_order_vector_db, query_vector_db, get_order_by_id, get_orders_by_customer_id
+from functools import lru_cache
 
+# Add the project root to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import configuration - no circular imports here
+from src.config import ORDER_STATUS_DESCRIPTIONS
+
+@lru_cache(maxsize=1)
 def load_order_data(use_cache: bool = True) -> pd.DataFrame:
     """
     Load order data from CSV file or cached version.
@@ -205,15 +209,23 @@ def load_return_policies(use_cache: bool = True) -> Dict[str, Any]:
 
     return policies
 
-# Add this to the end of your utils.py file
-def initialize_vector_db(orders_df=None):
-    """Initialize the vector database with order data."""
+def initialize_vector_db(orders_df=None, use_subset: bool = False):
+    """
+    Initialize the vector database with order data.
+
+    Args:
+        orders_df: Optional DataFrame with order data; if None, loads from file
+        use_subset: Whether to use a subset of the data for development
+
+    Returns:
+        ChromaDB collection
+    """
+    # Import here to avoid circular imports
+    from src.vector_db import get_vector_db_instance
+
     if orders_df is None:
         orders_df = load_order_data(use_cache=True)
 
-    # Import here to avoid circular imports
-    from src.vector_db import create_order_vector_db
-
-    # Create or load the vector database
-    collection = create_order_vector_db(orders_df)
+    # Get or create the vector database instance
+    collection = get_vector_db_instance(orders_df, use_subset=use_subset)
     return collection
