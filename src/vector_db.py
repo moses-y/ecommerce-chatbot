@@ -1,57 +1,68 @@
+# src/vector_db.py
 import os
 import pandas as pd
-import numpy as np
 import chromadb
-import google.generativeai as genai
+from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from functools import lru_cache
+
 # Load environment variables
 load_dotenv()
 
-# Configure Gemini API
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# Singleton instance for vector database
+_VECTOR_DB_INSTANCE = None
 
-class GeminiEmbeddingFunction:
-    """Custom embedding function using Gemini API"""
+class LocalEmbeddingFunction:
+    """Custom embedding function using sentence-transformers"""
+    def __init__(self):
+        self.model = SentenceTransformer('all-MiniLM-L6-v2')  # Lightweight model
+
     def __call__(self, input):
         """Generate embeddings for a list of texts"""
         if not input:
             return []
-
-        # Clean and prepare texts
         cleaned_texts = [text.strip() for text in input if text and text.strip()]
         if not cleaned_texts:
             return []
+        return self.model.encode(cleaned_texts).tolist()
 
-        try:
-            # Use Gemini embedding model
-            model = "models/embedding-001"
-            embeddings = []
-
-            # Process texts in batches to avoid API limits
-            batch_size = 20
-            for i in range(0, len(cleaned_texts), batch_size):
-                batch = cleaned_texts[i:i+batch_size]
-                batch_embeddings = [
-                    genai.embed_content(model=model, content=text)["embedding"]
-                    for text in batch
-                ]
-                embeddings.extend(batch_embeddings)
-
-            return embeddings
-        except Exception as e:
-            print(f"Error generating embeddings: {e}")
-            # Return zero embeddings as fallback
-            return [np.zeros(768) for _ in cleaned_texts]
-
-def create_order_vector_db(orders_df: pd.DataFrame, db_path: str = "./data/vector_db") -> chromadb.Collection:
+def get_vector_db_instance(orders_df: Optional[pd.DataFrame] = None,
+                          db_path: str = "./data/vector_db",
+                          use_subset: bool = False,
+                          force_refresh: bool = False) -> chromadb.Collection:
     """
-    Create a vector database from order data.
+    Get or create the vector database instance (Singleton pattern).
 
     Args:
-        orders_df: DataFrame containing order data
+        orders_df: DataFrame containing order data (optional)
         db_path: Path to store the vector database
+        use_subset: Whether to use a subset of the data for development
+        force_refresh: Whether to force a refresh of the database
+
+    Returns:
+        ChromaDB collection with order data
+    """
+    global _VECTOR_DB_INSTANCE
+
+    # Return existing instance if available and not forcing refresh
+    if _VECTOR_DB_INSTANCE is not None and not force_refresh:
+        return _VECTOR_DB_INSTANCE
+
+    # Create new instance
+    _VECTOR_DB_INSTANCE = create_order_vector_db(orders_df, db_path, use_subset)
+    return _VECTOR_DB_INSTANCE
+
+def create_order_vector_db(orders_df: Optional[pd.DataFrame],
+                          db_path: str = "./data/vector_db",
+                          use_subset: bool = False) -> chromadb.Collection:
+    """
+    Create a vector database from order data using local embeddings.
+
+    Args:
+        orders_df: DataFrame containing order data (optional)
+        db_path: Path to store the vector database
+        use_subset: Whether to use a subset of the data for development
 
     Returns:
         ChromaDB collection with order data
@@ -68,19 +79,42 @@ def create_order_vector_db(orders_df: pd.DataFrame, db_path: str = "./data/vecto
         )
     )
 
-    # Try to get existing collection or create a new one
+    # Try to get existing collection first
     try:
-        # First try to delete if it exists but is corrupted
-        try:
-            client.delete_collection("orders")
-            print("Deleted existing collection to create fresh one")
-        except Exception as e:
-            pass
+        collection = client.get_collection(
+            name="orders",
+            embedding_function=LocalEmbeddingFunction()
+        )
+        print("Using existing vector database")
+        return collection
+    except Exception as e:
+        print(f"Could not load existing collection: {e}")
+        pass
 
-        # Create a new collection
+    # If we don't have order data and couldn't load existing collection, we can't proceed
+    if orders_df is None:
+        raise ValueError("Orders DataFrame is required to create a new vector database")
+
+    # Use a subset of the data if specified
+    if use_subset:
+        orders_df = orders_df.head(1000)
+        print(f"Using subset of {len(orders_df)} orders for development")
+    else:
+        print(f"Processing full dataset of {len(orders_df)} orders")
+
+    # Try to delete if it exists but is corrupted
+    try:
+        client.delete_collection("orders")
+        print("Deleted existing collection to create fresh one")
+    except Exception:
+        pass
+
+    # Create a new collection with optimized parameters
+    try:
         collection = client.create_collection(
             name="orders",
-            embedding_function=GeminiEmbeddingFunction()
+            embedding_function=LocalEmbeddingFunction(),
+            metadata={"hnsw:M": 16, "hnsw:construction_ef": 100}
         )
         print("Creating new vector database")
 
@@ -88,7 +122,9 @@ def create_order_vector_db(orders_df: pd.DataFrame, db_path: str = "./data/vecto
         documents = []
         metadatas = []
         ids = []
+        batch_size = 5000  # Batch size for ChromaDB
 
+        total_orders = len(orders_df)
         for idx, row in orders_df.iterrows():
             # Create a text representation of the order for embedding
             order_text = f"""
@@ -118,13 +154,14 @@ def create_order_vector_db(orders_df: pd.DataFrame, db_path: str = "./data/vecto
             })
             ids.append(str(idx))
 
-            # Add in batches to avoid memory issues
-            if len(documents) >= 1000:
+            # Add in larger batches to reduce indexing overhead
+            if len(documents) >= batch_size:
                 collection.add(
                     documents=documents,
                     metadatas=metadatas,
                     ids=ids
                 )
+                print(f"Indexed {min(idx + 1, total_orders)} of {total_orders} orders")
                 documents = []
                 metadatas = []
                 ids = []
@@ -136,33 +173,31 @@ def create_order_vector_db(orders_df: pd.DataFrame, db_path: str = "./data/vecto
                 metadatas=metadatas,
                 ids=ids
             )
+            print(f"Indexed {total_orders} of {total_orders} orders")
 
         return collection
     except Exception as e:
         print(f"Error creating vector database: {e}")
-        # Try to get the collection without embedding function as fallback
-        try:
-            collection = client.get_collection(name="orders")
-            print("Using existing collection without custom embedding function")
-            return collection
-        except Exception as e:
-            # Create an empty collection as last resort
-            collection = client.create_collection(name="orders")
-            print("Created empty collection as fallback")
-            return collection
+        # Create an empty collection as last resort
+        collection = client.create_collection(name="orders")
+        print("Created empty collection as fallback")
+        return collection
 
-def query_vector_db(query: str, collection: chromadb.Collection, top_k: int = 5) -> List[Dict[str, Any]]:
+def query_vector_db(query: str, collection: Optional[chromadb.Collection] = None, top_k: int = 5) -> List[Dict[str, Any]]:
     """
     Query the vector database for relevant orders.
 
     Args:
         query: User query text
-        collection: ChromaDB collection to query
+        collection: ChromaDB collection to query (optional, uses singleton if None)
         top_k: Number of results to return
 
     Returns:
         List of relevant order data
     """
+    if collection is None:
+        collection = get_vector_db_instance()
+
     try:
         # Query the collection
         results = collection.query(
@@ -185,17 +220,20 @@ def query_vector_db(query: str, collection: chromadb.Collection, top_k: int = 5)
         print(f"Error querying vector database: {e}")
         return []
 
-def get_order_by_id(order_id: str, collection: chromadb.Collection) -> Dict[str, Any]:
+def get_order_by_id(order_id: str, collection: Optional[chromadb.Collection] = None) -> Dict[str, Any]:
     """
     Get order details by order ID.
 
     Args:
         order_id: Order ID to look up
-        collection: ChromaDB collection to query
+        collection: ChromaDB collection to query (optional, uses singleton if None)
 
     Returns:
         Order details or None if not found
     """
+    if collection is None:
+        collection = get_vector_db_instance()
+
     try:
         # Query by metadata
         results = collection.query(
@@ -215,17 +253,20 @@ def get_order_by_id(order_id: str, collection: chromadb.Collection) -> Dict[str,
         print(f"Error getting order by ID: {e}")
         return None
 
-def get_orders_by_customer_id(customer_id: str, collection: chromadb.Collection) -> List[Dict[str, Any]]:
+def get_orders_by_customer_id(customer_id: str, collection: Optional[chromadb.Collection] = None) -> List[Dict[str, Any]]:
     """
     Get all orders for a customer.
 
     Args:
         customer_id: Customer ID to look up
-        collection: ChromaDB collection to query
+        collection: ChromaDB collection to query (optional, uses singleton if None)
 
     Returns:
         List of order details
     """
+    if collection is None:
+        collection = get_vector_db_instance()
+
     try:
         # Query by metadata
         results = collection.query(
@@ -246,14 +287,12 @@ def get_orders_by_customer_id(customer_id: str, collection: chromadb.Collection)
     except Exception as e:
         print(f"Error getting orders by customer ID: {e}")
         return []
-    
-# Add to vector_db.py
 
 # In-memory cache for faster lookups
 _MEMORY_CACHE = {}
 
 @lru_cache(maxsize=1000)
-def cached_get_order_by_id(order_id, collection):
+def cached_get_order_by_id(order_id, collection=None):
     """Cached version of get_order_by_id for faster lookups"""
     # Check memory cache first
     cache_key = f"order_{order_id}"
@@ -270,7 +309,7 @@ def cached_get_order_by_id(order_id, collection):
     return result
 
 @lru_cache(maxsize=1000)
-def cached_get_orders_by_customer_id(customer_id, collection):
+def cached_get_orders_by_customer_id(customer_id, collection=None):
     """Cached version of get_orders_by_customer_id for faster lookups"""
     cache_key = f"customer_{customer_id}"
     if cache_key in _MEMORY_CACHE:
