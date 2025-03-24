@@ -95,16 +95,25 @@ class LLMService:
             logger.info("Using Gemini API")
             return llm
         except Exception as e:
-            logger.warning(f"Gemini API error: {e}. Falling back to OpenAI.")
-            # Fall back to OpenAI
-            llm = ChatOpenAI(
-                model=API_CONFIG["openai"]["model"],
-                temperature=API_CONFIG["openai"]["temperature"],
-                api_key=os.getenv("OPENAI_API_KEY"),
-                max_tokens=API_CONFIG["openai"]["max_tokens"],
-                request_timeout=API_CONFIG["openai"]["timeout_seconds"]
-            )
-            return llm
+            logger.warning(f"Gemini API error: {e}. Could not initialize Gemini API.")
+            # Skipping OpenAI fallback if OPENAI_API_KEY is not set
+            if not os.getenv("OPENAI_API_KEY"):
+                logger.warning("OpenAI API key is not set. Skipping OpenAI initialization.")
+                return None
+            # Initialize OpenAI as fallback
+            try:
+                llm = ChatOpenAI(
+                    model=API_CONFIG["openai"]["model"],
+                    temperature=API_CONFIG["openai"]["temperature"],
+                    api_key=os.getenv("OPENAI_API_KEY"),  # Ensure the API key is set
+                    max_tokens=API_CONFIG["openai"]["max_tokens"],
+                    request_timeout=API_CONFIG["openai"]["timeout_seconds"]
+                )
+                logger.info("Using OpenAI API")
+                return llm
+            except Exception as e:
+                logger.error(f"OpenAI API error: {e}. Could not initialize OpenAI API.")
+                raise Exception("LLM initialization failed due to missing API keys.")
 
     def generate_response(self, messages: List[Dict[str, Any]]) -> str:
         """Generate a response using the LLM."""
