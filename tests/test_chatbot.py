@@ -1,7 +1,16 @@
 # test_chatbot.py
+import os
+import sys
 import json
+import unittest
+import pandas as pd
 from unittest.mock import patch, MagicMock, mock_open
+ 
+# Add src directory to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from src.chatbot import chat_with_user
+
 # Add these test methods to your TestChatbot class
 
 def test_detect_intent(self):
