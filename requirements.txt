@@ -11,8 +11,9 @@ pytest==7.4.0
 gradio==5.22.0
 matplotlib
 huggingface-hub==0.29.3
-chromadb==0.6.3
+chromadb==1.0.0b0
 google-generativeai==0.8.3 
 pydantic==2.10.6 
 hnswlib==0.8.0 
 sentence-transformers==3.4.1
+bleach==6.2.0
