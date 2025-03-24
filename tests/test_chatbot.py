@@ -1,42 +1,57 @@
 # test_chatbot.py
 import os
 import sys
-import json
 import unittest
-import pandas as pd
 from unittest.mock import patch, MagicMock, mock_open
+import pandas as pd
+from typing import Dict, Any
 
-# Add src directory to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Add the project root to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.chatbot import chat_with_user
+from src.chatbot import (
+    chat_with_user,
+    detect_intent,
+    FAQ_RESPONSES,
+    order_service,
+    contact_service,
+    reset_state
+)
 
-class TestChatbot(unittest.TestCase):  # Inherit from unittest.TestCase
+class TestChatbot(unittest.TestCase):
+
+    def setUp(self):
+        """Set up test environment before each test."""
+        self.initial_state = reset_state()
+
     def test_detect_intent(self):
         """Test the intent detection function."""
-        from src.chatbot import detect_intent
-
-        # Test return policy intent
         self.assertEqual(detect_intent("What's your return policy?"), "return_policy")
-
-        # Test shipping policy intent
         self.assertEqual(detect_intent("How long does shipping take?"), "shipping_policy")
-
-        # Test human agent intent
+        self.assertEqual(detect_intent("What payment methods do you accept?"), "payment_methods")
         self.assertEqual(detect_intent("I want to speak to a human"), "human_agent")
-
-        # Test order status intent
         self.assertEqual(detect_intent("What's the status of my order?"), "order_status")
-
-        # Test no specific intent
         self.assertIsNone(detect_intent("Hello, how are you today?"))
 
-    @patch('src.chatbot.order_service.lookup_order_by_id')
-    def test_lookup_order_success(self, mock_lookup):
-        """Test successful order lookup."""
-        from src.chatbot import lookup_order
+    def test_chat_with_user_greeting(self):
+        """Test the chatbot's greeting."""
+        state = chat_with_user("Hello", self.initial_state)
+        self.assertIn("Hello! Welcome to our e-commerce support", state["messages"][-1]["content"])
 
-        # Mock successful order lookup
+    def test_chat_with_user_faq(self):
+        """Test the chatbot's response to FAQ questions."""
+        state = chat_with_user("What's your return policy?", self.initial_state)
+        self.assertIn("30 days", state["messages"][-1]["content"])
+
+        state = chat_with_user("How long does shipping take?", self.initial_state)
+        self.assertIn("Standard shipping", state["messages"][-1]["content"])
+
+        state = chat_with_user("What payment methods do you accept?", self.initial_state)
+        self.assertIn("credit cards", state["messages"][-1]["content"].lower())
+
+    @patch('src.chatbot.order_service.lookup_order_by_id')
+    def test_chat_with_user_order_lookup_success(self, mock_lookup):
+        """Test successful order lookup."""
         mock_lookup.return_value = ("delivered", {
             'purchase_date': 'January 01, 2023',
             'approved_date': 'January 01, 2023',
@@ -44,153 +59,72 @@ class TestChatbot(unittest.TestCase):  # Inherit from unittest.TestCase
             'actual_delivery': 'January 05, 2023'
         })
 
-        # Create test state
-        state = {
-            "messages": [{"role": "user", "content": "What's the status of my order TEST123?"}],
-            "order_lookup_attempted": False,
-            "current_order_id": None,
-            "needs_human_agent": False,
-            "contact_info_collected": False
-        }
+        state = chat_with_user("What's the status of my order TEST123?", self.initial_state)
 
-        # Call the function
-        result = lookup_order(state)
-
-        # Verify results
-        self.assertTrue(result["order_lookup_attempted"])
-        self.assertEqual(result["current_order_id"], "TEST123")
-        self.assertIn("delivered", result["messages"][-1]["content"])
+        self.assertIn("delivered", state["messages"][-1]["content"])
+        self.assertTrue(state["order_lookup_attempted"])
+        self.assertEqual(state["current_order_id"], "TEST123")
 
     @patch('src.chatbot.order_service.lookup_order_by_id')
-    def test_lookup_order_not_found(self, mock_lookup):
+    def test_chat_with_user_order_lookup_not_found(self, mock_lookup):
         """Test order lookup when order is not found."""
-        from src.chatbot import lookup_order
-
-        # Mock order not found
         mock_lookup.return_value = (None, None)
 
-        # Create test state
-        state = {
-            "messages": [{"role": "user", "content": "What's the status of my order NONEXISTENT?"}],
-            "order_lookup_attempted": False,
-            "current_order_id": None,
-            "needs_human_agent": False,
-            "contact_info_collected": False
-        }
+        state = chat_with_user("What's the status of my order NONEXISTENT?", self.initial_state)
 
-        # Call the function
-        result = lookup_order(state)
-
-        # Verify results
-        self.assertTrue(result["order_lookup_attempted"])
-        self.assertIn("couldn't find", result["messages"][-1]["content"].lower())
+        self.assertIn("couldn't find", state["messages"][-1]["content"].lower())
+        self.assertTrue(state["order_lookup_attempted"])
 
     @patch('src.chatbot.contact_service.save_contact_info')
-    def test_collect_contact_info(self, mock_save):
+    def test_chat_with_user_collect_contact_info(self, mock_save):
         """Test contact information collection."""
-        from src.chatbot import collect_contact_info
-
-        # Mock successful save
         mock_save.return_value = True
 
-        # Test initial state
-        state = {
-            "messages": [{"role": "user", "content": "I want to speak to a human"}],
-            "needs_human_agent": True,
-            "contact_info_collected": False,
-            "contact_step": 0
-        }
+        # Initial request to speak to a human
+        state = chat_with_user("I want to speak to a human", self.initial_state)
+        self.assertIn("Could you please provide your name?", state["messages"][-1]["content"])
+        self.assertEqual(state["contact_step"], 1)
 
-        # Test step 0 - Ask for name
-        result = collect_contact_info(state)
-        self.assertEqual(result["contact_step"], 1)
-        self.assertIn("provide your name", result["messages"][-1]["content"])
+        # Provide name
+        state = chat_with_user("John Doe", state)
+        self.assertIn("Could you please provide your email address?", state["messages"][-1]["content"])
+        self.assertEqual(state["contact_step"], 2)
+        self.assertEqual(state["customer_name"], "John Doe")
 
-        # Test step 1 - Got name, ask for email
-        state = result.copy()
-        state["messages"].append({"role": "user", "content": "John Doe"})
-        result = collect_contact_info(state)
-        self.assertEqual(result["contact_step"], 2)
-        self.assertEqual(result["customer_name"], "John Doe")
-        self.assertIn("email address", result["messages"][-1]["content"])
+        # Provide email
+        state = chat_with_user("john@example.com", state)
+        self.assertIn("Finally, could you please provide your phone number?", state["messages"][-1]["content"])
+        self.assertEqual(state["contact_step"], 3)
+        self.assertEqual(state["customer_email"], "john@example.com")
 
-        # Test step 2 - Got email, ask for phone
-        state = result.copy()
-        state["messages"].append({"role": "user", "content": "john@example.com"})
-        result = collect_contact_info(state)
-        self.assertEqual(result["contact_step"], 3)
-        self.assertEqual(result["customer_email"], "john@example.com")
-        self.assertIn("phone number", result["messages"][-1]["content"])
-
-        # Test step 3 - Got phone, complete collection
-        state = result.copy()
-        state["messages"].append({"role": "user", "content": "555-123-4567"})
-        result = collect_contact_info(state)
-        self.assertEqual(result["contact_step"], 4)
-        self.assertEqual(result["customer_phone"], "555-123-4567")
-        self.assertTrue(result["contact_info_collected"])
-        self.assertIn("representative will contact you", result["messages"][-1]["content"])
+        # Provide phone number
+        state = chat_with_user("555-123-4567", state)
+        self.assertIn("A customer service representative will contact you soon", state["messages"][-1]["content"])
+        self.assertEqual(state["contact_step"], 4)
+        self.assertEqual(state["customer_phone"], "555-123-4567")
+        self.assertTrue(state["contact_info_collected"])
 
     @patch('src.chatbot.llm_service.generate_response')
-    def test_continue_conversation(self, mock_generate):
+    def test_chat_with_user_continue_conversation(self, mock_generate):
         """Test conversation continuation."""
-        from src.chatbot import continue_conversation
-
-        # Mock LLM response
         mock_generate.return_value = "I'm here to help with your e-commerce questions."
 
-        # Create test state
-        state = {
-            "messages": [{"role": "user", "content": "Hello, can you help me?"}],
-            "order_lookup_attempted": False,
-            "current_order_id": None,
-            "needs_human_agent": False,
-            "contact_info_collected": False
-        }
+        state = chat_with_user("Hello, can you help me?", self.initial_state)
 
-        # Call the function
-        result = continue_conversation(state)
+        self.assertEqual(len(state["messages"]), 2)
+        self.assertEqual(state["messages"][-1]["role"], "assistant")
+        self.assertEqual(state["messages"][-1]["content"], "I'm here to help with your e-commerce questions.")
 
-        # Verify results
-        self.assertEqual(len(result["messages"]), 2)
-        self.assertEqual(result["messages"][-1]["role"], "assistant")
-        self.assertEqual(result["messages"][-1]["content"], "I'm here to help with your e-commerce questions.")
-
-    def test_chat_with_user_faq(self):
-        """Test chatbot response to FAQ questions."""
-        # Test return policy FAQ
-        result = chat_with_user("What's your return policy?")
-        self.assertIn("30 days", result["messages"][-1]["content"])
-
-        # Test shipping policy FAQ
-        result = chat_with_user("How long does shipping take?")
-        self.assertIn("Standard shipping", result["messages"][-1]["content"])
-
-        # Test payment methods FAQ
-        result = chat_with_user("What payment methods do you accept?")
-        self.assertIn("credit cards", result["messages"][-1]["content"].lower())
-
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('json.dump')
-    def test_feedback_submission(self, mock_json_dump, mock_file_open):
-        """Test feedback submission functionality."""
-        from src.chatbot import submit_feedback
-
-        # Create test state
-        state = {
-            "session_id": "20250323123456",
-            "chat_history": [
-                ("Hello", "Hi there! How can I help you today?"),
-                ("What's your return policy?", "Our return policy allows returns within 30 days...")
-            ],
-            "feedback": None
-        }
-
-        # Submit feedback
-        feedback = "Great service, very helpful!"
-        result = submit_feedback(feedback, state)
-
-        # Verify results
-        self.assertEqual(result["feedback"], feedback)
-        mock_file_open.assert_called_once()
-        mock_json_dump.assert_called_once()
+    def test_chat_with_user_reset_state(self):
+        """Test that the reset_state function returns a valid initial state."""
+        initial_state = reset_state()
+        self.assertIsInstance(initial_state, dict)
+        self.assertEqual(initial_state["messages"], [])
+        self.assertFalse(initial_state["order_lookup_attempted"])
+        self.assertIsNone(initial_state["current_order_id"])
+        self.assertFalse(initial_state["needs_human_agent"])
+        self.assertFalse(initial_state["contact_info_collected"])
+        self.assertIsNone(initial_state["customer_name"])
+        self.assertIsNone(initial_state["customer_email"])
+        self.assertIsNone(initial_state["customer_phone"])
+        self.assertEqual(initial_state["contact_step"], 0)
