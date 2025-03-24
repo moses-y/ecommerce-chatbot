@@ -1,136 +1,188 @@
-
 # test_chatbot.py
-import os
-import sys
-import unittest
-import pandas as pd
-from unittest.mock import patch, MagicMock
-
-# Add src directory to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+import json
+from unittest.mock import patch, MagicMock, mock_open
 from src.chatbot import chat_with_user
-from src.utils import get_order_status, format_order_details, load_order_data
+# Add these test methods to your TestChatbot class
 
-class TestChatbot(unittest.TestCase):
-    """Test cases for the e-commerce chatbot."""
+def test_detect_intent(self):
+    """Test the intent detection function."""
+    from src.chatbot import detect_intent
 
-    def setUp(self):
-        """Set up test fixtures."""
-        # Create a sample orders dataframe for testing
-        self.sample_orders = pd.DataFrame({
-            'order_id': ['TEST123', 'TEST456'],
-            'customer_id': ['CUST1', 'CUST2'],
-            'order_status': ['delivered', 'processing'],
-            'order_purchase_timestamp': ['2023-01-01 10:00:00', '2023-02-01 11:00:00'],
-            'order_approved_at': ['2023-01-01 10:30:00', '2023-02-01 11:30:00'],
-            'order_delivered_carrier_date': ['2023-01-03 09:00:00', None],
-            'order_delivered_customer_date': ['2023-01-05 14:00:00', None],
-            'order_estimated_delivery_date': ['2023-01-10 00:00:00', '2023-02-15 00:00:00']
-        })
+    # Test return policy intent
+    self.assertEqual(detect_intent("What's your return policy?"), "return_policy")
 
-    @patch('src.utils.load_order_data')
-    def test_get_order_status(self, mock_load_data):
-        """Test retrieving order status."""
-        mock_load_data.return_value = self.sample_orders
+    # Test shipping policy intent
+    self.assertEqual(detect_intent("How long does shipping take?"), "shipping_policy")
 
-        # Test existing order
-        status, details = get_order_status(self.sample_orders, 'TEST123')
-        self.assertEqual(status, 'delivered')
-        self.assertIsNotNone(details)
+    # Test human agent intent
+    self.assertEqual(detect_intent("I want to speak to a human"), "human_agent")
 
-        # Test non-existent order
-        status, details = get_order_status(self.sample_orders, 'NONEXISTENT')
-        self.assertIsNone(status)
-        self.assertIsNone(details)
+    # Test order status intent
+    self.assertEqual(detect_intent("What's the status of my order?"), "order_status")
 
-    def test_format_order_details(self):
-        """Test formatting order details into a response."""
-        order_id = "TEST123"
-        status = "delivered"
-        details = {
-            'purchase_date': 'January 01, 2023',
-            'approved_date': 'January 01, 2023',
-            'estimated_delivery': 'January 10, 2023',
-            'actual_delivery': 'January 05, 2023'
-        }
+    # Test no specific intent
+    self.assertIsNone(detect_intent("Hello, how are you today?"))
 
-        response = format_order_details(order_id, status, details)
+@patch('src.chatbot.order_service.lookup_order_by_id')
+def test_lookup_order_success(self, mock_lookup):
+    """Test successful order lookup."""
+    from src.chatbot import lookup_order
 
-        # Check that the response contains key information
-        self.assertIn(order_id, response)
-        self.assertIn(status, response)
-        self.assertIn(details['purchase_date'], response)
-        self.assertIn(details['actual_delivery'], response)
+    # Mock successful order lookup
+    mock_lookup.return_value = ("delivered", {
+        'purchase_date': 'January 01, 2023',
+        'approved_date': 'January 01, 2023',
+        'estimated_delivery': 'January 10, 2023',
+        'actual_delivery': 'January 05, 2023'
+    })
 
-    @patch('src.chatbot.create_chatbot')
-    def test_chat_with_user_order_status(self, mock_create_chatbot):
-        """Test chatbot response to order status inquiry."""
-        # Mock the chatbot to return a predefined state
-        mock_graph = MagicMock()
-        mock_graph.invoke.return_value = {
-            "messages": [
-                {"role": "user", "content": "What's the status of my order TEST123?"},
-                {"role": "assistant", "content": "Your order TEST123 is delivered."}
-            ],
-            "order_lookup_attempted": True,
-            "current_order_id": "TEST123",
-            "needs_human_agent": False,
-            "contact_info_collected": False,
-            "customer_name": None,
-            "customer_email": None
-        }
-        mock_create_chatbot.return_value = mock_graph
+    # Create test state
+    state = {
+        "messages": [{"role": "user", "content": "What's the status of my order TEST123?"}],
+        "order_lookup_attempted": False,
+        "current_order_id": None,
+        "needs_human_agent": False,
+        "contact_info_collected": False
+    }
 
-        # Test the chat function
-        result = chat_with_user("What's the status of my order TEST123?")
+    # Call the function
+    result = lookup_order(state)
 
-        # Verify the result
-        self.assertTrue(result["order_lookup_attempted"])
-        self.assertEqual(result["current_order_id"], "TEST123")
-        self.assertEqual(len(result["messages"]), 2)
-        self.assertIn("delivered", result["messages"][1]["content"])
+    # Verify results
+    self.assertTrue(result["order_lookup_attempted"])
+    self.assertEqual(result["current_order_id"], "TEST123")
+    self.assertIn("delivered", result["messages"][-1]["content"])
 
-    @patch('src.chatbot.create_chatbot')
-    def test_chat_with_user_human_request(self, mock_create_chatbot):
-        """Test chatbot response to human agent request."""
-        # Mock the chatbot to return a predefined state
-        mock_graph = MagicMock()
-        mock_graph.invoke.return_value = {
-            "messages": [
-                {"role": "user", "content": "I want to speak to a human representative"},
-                {"role": "assistant", "content": "I understand you'd like to speak with a human representative. I'll help connect you."}
-            ],
-            "order_lookup_attempted": False,
-            "current_order_id": None,
-            "needs_human_agent": True,
-            "contact_info_collected": False,
-            "customer_name": None,
-            "customer_email": None
-        }
-        mock_create_chatbot.return_value = mock_graph
+@patch('src.chatbot.order_service.lookup_order_by_id')
+def test_lookup_order_not_found(self, mock_lookup):
+    """Test order lookup when order is not found."""
+    from src.chatbot import lookup_order
 
-        # Test the chat function
-        result = chat_with_user("I want to speak to a human representative")
+    # Mock order not found
+    mock_lookup.return_value = (None, None)
 
-        # Verify the result
-        self.assertTrue(result["needs_human_agent"])
-        self.assertFalse(result["contact_info_collected"])
-        self.assertIn("human representative", result["messages"][1]["content"])
+    # Create test state
+    state = {
+        "messages": [{"role": "user", "content": "What's the status of my order NONEXISTENT?"}],
+        "order_lookup_attempted": False,
+        "current_order_id": None,
+        "needs_human_agent": False,
+        "contact_info_collected": False
+    }
 
-    @patch('src.utils.pd.read_csv')
-    def test_load_order_data(self, mock_pd_read_csv):
-        """Test loading order data."""
-        # Mock pandas read_csv to return our sample data
-        mock_pd_read_csv.return_value = self.sample_orders
+    # Call the function
+    result = lookup_order(state)
 
-        # Test with cache enabled
-        result = load_order_data(use_cache=True)
-        self.assertEqual(len(result), 2)  # Our sample has 2 rows
+    # Verify results
+    self.assertTrue(result["order_lookup_attempted"])
+    self.assertIn("couldn't find", result["messages"][-1]["content"].lower())
 
-        # Test with cache disabled
-        result = load_order_data(use_cache=False)
-        self.assertEqual(len(result), 2)  # Our sample has 2 rows
+@patch('src.chatbot.contact_service.save_contact_info')
+def test_collect_contact_info(self, mock_save):
+    """Test contact information collection."""
+    from src.chatbot import collect_contact_info
 
-if __name__ == '__main__':
-    unittest.main()
+    # Mock successful save
+    mock_save.return_value = True
+
+    # Test initial state
+    state = {
+        "messages": [{"role": "user", "content": "I want to speak to a human"}],
+        "needs_human_agent": True,
+        "contact_info_collected": False,
+        "contact_step": 0
+    }
+
+    # Test step 0 - Ask for name
+    result = collect_contact_info(state)
+    self.assertEqual(result["contact_step"], 1)
+    self.assertIn("provide your name", result["messages"][-1]["content"])
+
+    # Test step 1 - Got name, ask for email
+    state = result.copy()
+    state["messages"].append({"role": "user", "content": "John Doe"})
+    result = collect_contact_info(state)
+    self.assertEqual(result["contact_step"], 2)
+    self.assertEqual(result["customer_name"], "John Doe")
+    self.assertIn("email address", result["messages"][-1]["content"])
+
+    # Test step 2 - Got email, ask for phone
+    state = result.copy()
+    state["messages"].append({"role": "user", "content": "john@example.com"})
+    result = collect_contact_info(state)
+    self.assertEqual(result["contact_step"], 3)
+    self.assertEqual(result["customer_email"], "john@example.com")
+    self.assertIn("phone number", result["messages"][-1]["content"])
+
+    # Test step 3 - Got phone, complete collection
+    state = result.copy()
+    state["messages"].append({"role": "user", "content": "555-123-4567"})
+    result = collect_contact_info(state)
+    self.assertEqual(result["contact_step"], 4)
+    self.assertEqual(result["customer_phone"], "555-123-4567")
+    self.assertTrue(result["contact_info_collected"])
+    self.assertIn("representative will contact you", result["messages"][-1]["content"])
+
+@patch('src.chatbot.llm_service.generate_response')
+def test_continue_conversation(self, mock_generate):
+    """Test conversation continuation."""
+    from src.chatbot import continue_conversation
+
+    # Mock LLM response
+    mock_generate.return_value = "I'm here to help with your e-commerce questions."
+
+    # Create test state
+    state = {
+        "messages": [{"role": "user", "content": "Hello, can you help me?"}],
+        "order_lookup_attempted": False,
+        "current_order_id": None,
+        "needs_human_agent": False,
+        "contact_info_collected": False
+    }
+
+    # Call the function
+    result = continue_conversation(state)
+
+    # Verify results
+    self.assertEqual(len(result["messages"]), 2)
+    self.assertEqual(result["messages"][-1]["role"], "assistant")
+    self.assertEqual(result["messages"][-1]["content"], "I'm here to help with your e-commerce questions.")
+
+def test_chat_with_user_faq(self):
+    """Test chatbot response to FAQ questions."""
+    # Test return policy FAQ
+    result = chat_with_user("What's your return policy?")
+    self.assertIn("30 days", result["messages"][-1]["content"])
+
+    # Test shipping policy FAQ
+    result = chat_with_user("How long does shipping take?")
+    self.assertIn("Standard shipping", result["messages"][-1]["content"])
+
+    # Test payment methods FAQ
+    result = chat_with_user("What payment methods do you accept?")
+    self.assertIn("credit cards", result["messages"][-1]["content"].lower())
+
+@patch('builtins.open', new_callable=mock_open)
+@patch('json.dump')
+def test_feedback_submission(self, mock_json_dump, mock_file_open):
+    """Test feedback submission functionality."""
+    from src.chatbot import submit_feedback
+
+    # Create test state
+    state = {
+        "session_id": "20250323123456",
+        "chat_history": [
+            ("Hello", "Hi there! How can I help you today?"),
+            ("What's your return policy?", "Our return policy allows returns within 30 days...")
+        ],
+        "feedback": None
+    }
+
+    # Submit feedback
+    feedback = "Great service, very helpful!"
+    result = submit_feedback(feedback, state)
+
+    # Verify results
+    self.assertEqual(result["feedback"], feedback)
+    mock_file_open.assert_called_once()
+    mock_json_dump.assert_called_once()
