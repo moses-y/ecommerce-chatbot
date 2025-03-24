@@ -92,11 +92,15 @@ css = """
 }
 
 /* Chat container */
+/* Chat container */
 .chat-container {
-    height: calc(120vh - 180px);
+    height: calc(100vh - 240px); /* Reduced from 120vh to 100vh */
+    min-height: 400px; /* Minimum height to prevent too small containers */
+    max-height: 800px; /* Maximum height to prevent excessive stretching */
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative; /* For proper child positioning */
 }
 
 /* Chatbot area */
@@ -110,7 +114,9 @@ css = """
     border: 1px solid var(--border-glass);
     box-shadow: var(--shadow-glass);
     scrollbar-width: thin;
-    scrollbar-color: var(--primary) transparent;
+    scrollbar-color: var(--primary) transparent);
+    height: calc(100% - 120px) !important; /* Adjust for input area */
+    min-height: 300px; /* Minimum height */
 }
 
 #chatbot::-webkit-scrollbar {
@@ -153,13 +159,14 @@ css = """
 
 /* Input area */
 .input-area {
-    display: flex;
-    gap: 8px;
-    padding: 16px;
+    position: sticky;
+    bottom: 0;
     background: var(--bg-glass);
-    border-radius: 12px;
-    margin-top: 16px;
-    border: 1px solid var(--border-glass);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border-glass);
+    padding: 1rem;
+    margin-top: auto;
+    z-index: 10;
 }
 
 .input-area input {
@@ -379,12 +386,35 @@ css = """
 
 /* Responsive design */
 @media (max-width: 768px) {
-    .sidebar {
-        display: none;
+    .chat-container {
+        height: calc(100vh - 180px);
+        min-height: 300px;
     }
 
+    #chatbot {
+        height: calc(100% - 100px) !important;
+        min-height: 200px;
+    }
+
+    .input-area {
+        padding: 0.75rem;
+    }
+}
+
+/* For very small screens */
+@media (max-width: 480px) {
     .chat-container {
-        height: calc(100vh - 120px);
+        height: calc(100vh - 160px);
+        min-height: 250px;
+    }
+
+    #chatbot {
+        height: calc(100% - 80px) !important;
+        min-height: 150px;
+    }
+
+    .input-area {
+        padding: 0.5rem;
     }
 }
 
@@ -827,7 +857,7 @@ with gr.Blocks(theme=theme, css=css) as demo:
                 elem_id="chatbot",
                 avatar_images=("👤", "🤖"),
                 show_copy_button=True,
-                height=500,
+                height="100%",
                 type="messages"
             )
 
