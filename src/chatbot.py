@@ -611,15 +611,15 @@ def detect_intent(message: str) -> Optional[str]:
     """Detect the intent of a user message."""
     message_lower = message.lower()
 
-    # Return policy
-    if any(phrase in message_lower for phrase in ["return policy", "policy on return", "can i return",
-                                                 "how to return", "policy for returns", "returned items"]):
-        return "return_policy"
-
     # Shipping policy
     if any(phrase in message_lower for phrase in ["shipping policy", "delivery policy", "shipping time",
                                                  "how long shipping", "shipping cost"]):
         return "shipping_policy"
+
+    # Return policy
+    if any(phrase in message_lower for phrase in ["return policy", "policy on return", "can i return",
+                                                 "how to return", "policy for returns", "returned items"]):
+        return "return_policy"
 
     # Payment methods
     if any(phrase in message_lower for phrase in ["payment method", "payment option", "how to pay",
