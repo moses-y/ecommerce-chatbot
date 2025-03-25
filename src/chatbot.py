@@ -519,9 +519,9 @@ def chat_with_user(user_input: str, chat_state: Optional[Dict] = None) -> Dict:
 
     # Check for FAQs FIRST, before any other processing
     intent = detect_intent(user_input.lower())  # Convert to lowercase once
-    if intent and intent in FAQ_RESPONSES and intent not in ["greeting", "goodbye", "human_agent", "order_status"]:
+    if intent and intent in FAQ_CONFIG and intent not in ["greeting", "goodbye", "human_agent", "order_status"]:
         # Only process direct FAQ responses here
-        chat_state["messages"].append({"role": "assistant", "content": FAQ_RESPONSES[intent]})
+        chat_state["messages"].append({"role": "assistant", "content": FAQ_CONFIG[intent]})
         return chat_state
 
     # Check if user wants to cancel human agent request
