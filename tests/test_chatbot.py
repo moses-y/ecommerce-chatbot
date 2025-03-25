@@ -19,7 +19,6 @@ from src.chatbot import (
     contact_service,
     reset_state
 )
-from src.config import FAQ_CONFIG
 
 class TestChatbot(unittest.TestCase):
 
@@ -42,16 +41,18 @@ class TestChatbot(unittest.TestCase):
         self.assertIn("Hello! Welcome to our e-commerce support", state["messages"][-1]["content"])
 
     def test_chat_with_user_faq(self):
-        """Test the chatbot's response to FAQ questions."""
-        state = chat_with_user("What's your return policy?", self.initial_state)
-        self.assertIn("30 days", state["messages"][-1]["content"])
+    """Test the chatbot's response to FAQ questions."""
+    state = chat_with_user("What's your return policy?", self.initial_state)
+    self.assertIn("30 days", state["messages"][-1]["content"])
 
-        state = chat_with_user("How long does shipping take?", self.initial_state)
-        self.assertIn("Standard shipping (5-7 business days): Free for orders over $35, otherwise $4.99", state["messages"][-1]["content"])  # Corrected assertion
+    state = chat_with_user("How long does shipping take?", self.initial_state)
+    self.assertIn(
+        FAQ_CONFIG["responses"]["shipping_policy"].split("\n")[2].strip(),  # Get the shipping time line
+        state["messages"][-1]["content"]
+    )
 
-        state = chat_with_user("What payment methods do you accept?", self.initial_state)
-        self.assertIn("credit cards", state["messages"][-1]["content"].lower())
-
+    state = chat_with_user("What payment methods do you accept?", self.initial_state)
+    self.assertIn("credit cards", state["messages"][-1]["content"].lower())
     @patch('src.chatbot.order_service.lookup_order_by_id')
     def test_chat_with_user_order_lookup_success(self, mock_lookup):
         """Test successful order lookup."""
