@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.chatbot import (
     chat_with_user,
     detect_intent,
-    FAQ_CONFIG,
+    FAQ_RESPONSES,
     order_service,
     contact_service,
     reset_state
@@ -115,7 +115,7 @@ class TestChatbot(unittest.TestCase):
 
         self.assertEqual(len(state["messages"]), 2)
         self.assertEqual(state["messages"][-1]["role"], "assistant")
-        self.assertIn(FAQ_CONFIG["greeting"], state["messages"][-1]["content"])
+        self.assertIn(FAQ_RESPONSES["greeting"], state["messages"][-1]["content"])
 
     def test_chat_with_user_reset_state(self):
         """Test that the reset_state function returns a valid initial state."""
