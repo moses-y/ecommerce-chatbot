@@ -1069,8 +1069,13 @@ def health_check():
         # Test LLM service
         llm_service.generate_response(test_state["messages"], conversation_memory)
         
-        # Test vector database
-        vector_collection.query("test")
+        # Test vector database with proper vector input
+        # Using a dummy vector of the correct dimension (384 for all-MiniLM-L6-v2)
+        test_vector = [0.0] * 384  # Create a vector of zeros with correct dimension
+        vector_collection.query(
+            query_embeddings=[test_vector],
+            n_results=1
+        )
         
         return {
             "status": "healthy",
