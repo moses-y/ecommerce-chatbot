@@ -581,7 +581,8 @@ def detect_intent(message: str) -> Optional[str]:
 
     # Shipping policy
     if any(phrase in message_lower for phrase in ["shipping policy", "delivery policy", "shipping time",
-                                                 "how long shipping", "shipping cost"]):
+                                                 "how long shipping", "shipping cost", "how long does shipping",
+                                                 "shipping take"]):  # Added more shipping phrases
         return "shipping_policy"
 
     # Payment methods
@@ -661,20 +662,25 @@ def chat_with_user(user_input: str, chat_state: Optional[Dict] = None) -> Dict:
     if not chat_state["messages"] or chat_state["messages"][-1]["content"] != user_input:
         chat_state["messages"].append({"role": "user", "content": user_input})
 
-    # Check if user wants to cancel human agent request
-    user_input_lower = user_input.lower()
+    # Check for FAQs FIRST, before any other processing
+    intent = detect_intent(user_input.lower())  # Convert to lowercase once
+    if intent and intent in FAQ_RESPONSES and intent not in ["greeting", "goodbye", "human_agent", "order_status"]:
+        # Only process direct FAQ responses here
+        chat_state["messages"].append({"role": "assistant", "content": FAQ_RESPONSES[intent]})
+        return chat_state
 
+    # Check if user wants to cancel human agent request
     if chat_state.get("needs_human_agent") and not chat_state.get("contact_info_collected"):
         cancel_keywords = ["cancel", "nevermind", "never mind", "stop", "go back", "different question"]
         customer_id_keywords = ["customer id", "my id", "delivery status", "order status", "track"]
 
-        if any(keyword in user_input_lower for keyword in cancel_keywords) or any(keyword in user_input_lower for keyword in customer_id_keywords):
+        if any(keyword in user_input.lower() for keyword in cancel_keywords) or any(keyword in user_input.lower() for keyword in customer_id_keywords):
             # Reset the human agent flow
             chat_state["needs_human_agent"] = False
             chat_state["contact_step"] = 0
 
             # If they're asking about customer ID specifically
-            if any(keyword in user_input_lower for keyword in customer_id_keywords):
+            if any(keyword in user_input.lower() for keyword in customer_id_keywords):
                 response = "I understand you'd like to check your order status using your customer ID. Could you please provide your customer ID? It should be a 32-character alphanumeric code."
                 chat_state["messages"].append({"role": "assistant", "content": response})
                 return chat_state
@@ -682,13 +688,6 @@ def chat_with_user(user_input: str, chat_state: Optional[Dict] = None) -> Dict:
                 response = "I've canceled the request to speak with a human representative. How else can I help you today?"
                 chat_state["messages"].append({"role": "assistant", "content": response})
                 return chat_state
-
-    # Check for FAQs first - no need to call API for these
-    intent = detect_intent(user_input)
-
-    if intent and intent in FAQ_RESPONSES:
-        chat_state["messages"].append({"role": "assistant", "content": FAQ_RESPONSES[intent]})
-        return chat_state
 
     # Handle human agent requests
     if intent == "human_agent" and not chat_state.get("needs_human_agent"):
@@ -783,8 +782,8 @@ def chat_with_user(user_input: str, chat_state: Optional[Dict] = None) -> Dict:
                 else:
                     # Multiple orders for this customer
                     sorted_orders = sorted(customer_orders,
-                                          key=lambda x: pd.to_datetime(x['order_purchase_timestamp']),
-                                          reverse=True)
+                                        key=lambda x: pd.to_datetime(x['order_purchase_timestamp']),
+                                        reverse=True)
                     recent_order = sorted_orders[0]
                     order_id = recent_order['order_id']
                     status = recent_order['order_status']
@@ -822,17 +821,13 @@ Could you please provide your order ID?"""
         chat_state["messages"].append({"role": "assistant", "content": response})
         return chat_state
 
-    # Get chatbot
-    chatbot = create_chatbot()
-
-    # Process message through graph with higher recursion limit
+    # Process through chatbot for all other cases
     try:
+        chatbot = create_chatbot()
         result = chatbot.invoke(chat_state, config={"recursion_limit": 30})
         return result
     except Exception as e:
         logger.error(f"Error in chatbot processing: {e}")
-
-        # Fallback response if graph fails
         chat_state["messages"].append({
             "role": "assistant",
             "content": "I'm sorry, I don't have specific information about that. Would you like to ask about our return policy, shipping options, order status, or speak with a human representative?"
