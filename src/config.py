@@ -31,7 +31,7 @@ For order status inquiries, explain what each status means and provide relevant 
 
 IMPORTANT: When checking order status, ask for either order ID or customer ID. Both are 32-character alphanumeric codes.
 """
-======= FAQ ======
+# ======= FAQ CONFIG ======
 FAQ_CONFIG = {
     "responses": {
         "return_policy": """Our return policy is as follows:
