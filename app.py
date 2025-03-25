@@ -1096,31 +1096,12 @@ def health_check():
 def configure_logging():
     """Configure logging for production environment."""
     try:
-        log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-        os.makedirs(log_dir, exist_ok=True)
-        
-        timestamp = datetime.now().strftime('%Y%m%d')
-        log_file = os.path.join(log_dir, f"app_{timestamp}.log")
-        
-        # Configure root logger
+        # Configure root logger with just console output
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             handlers=[
-                logging.StreamHandler(),  # Console output
-                RotatingFileHandler(  # Changed from logging.handlers.RotatingFileHandler
-                    log_file,
-                    maxBytes=10485760,  # 10MB
-                    backupCount=5,
-                    encoding='utf-8'
-                ),
-                TimedRotatingFileHandler(  # Changed from logging.handlers.TimedRotatingFileHandler
-                    log_file,
-                    when='midnight',
-                    interval=1,
-                    backupCount=30,
-                    encoding='utf-8'
-                )
+                logging.StreamHandler()  # Console output only
             ]
         )
         
@@ -1129,11 +1110,11 @@ def configure_logging():
         logging.getLogger('urllib3').setLevel(logging.WARNING)
         logging.getLogger('matplotlib').setLevel(logging.WARNING)
         
-        logger.info(f"Logging configured. Log file: {log_file}")
+        logger.info("Logging configured with console output")
         return True
     except Exception as e:
         print(f"Failed to configure logging: {e}")
-        raise
+        return False  # Changed to return False instead of raising
 
 def get_server_config():
     """Get server configuration from environment or use defaults."""
@@ -1179,11 +1160,12 @@ def initialize_app():
         raise
 
 # ===== Launch the app =====
-
 if __name__ == "__main__":
     try:
-        # Configure logging first
-        configure_logging()
+        # Try to configure logging, but continue if it fails
+        if not configure_logging():
+            print("Warning: Could not configure logging, continuing with default configuration")
+        
         logger.info("Starting E-commerce Support Assistant...")
         
         # Initialize application
@@ -1223,7 +1205,7 @@ if __name__ == "__main__":
         logger.info("Application launched successfully")
         
     except Exception as e:
-        logger.critical(f"Failed to launch application: {e}", exc_info=True)
+        print(f"Critical error: Failed to launch application: {e}")
         sys.exit(1)
     finally:
         logger.info("Shutting down application...")
