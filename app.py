@@ -9,6 +9,11 @@ from datetime import datetime
 from dotenv import load_dotenv
 from typing import Dict, List, Optional, Tuple, Any
 
+# Add logging
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Add the project root to sys.path for module imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -92,15 +97,11 @@ css = """
 }
 
 /* Chat container */
-/* Chat container */
 .chat-container {
-    height: calc(100vh - 240px); /* Reduced from 120vh to 100vh */
-    min-height: 400px; /* Minimum height to prevent too small containers */
-    max-height: 800px; /* Maximum height to prevent excessive stretching */
+    height: calc(120vh - 180px);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    position: relative; /* For proper child positioning */
 }
 
 /* Chatbot area */
@@ -114,9 +115,7 @@ css = """
     border: 1px solid var(--border-glass);
     box-shadow: var(--shadow-glass);
     scrollbar-width: thin;
-    scrollbar-color: var(--primary) transparent);
-    height: calc(100% - 120px) !important; /* Adjust for input area */
-    min-height: 300px; /* Minimum height */
+    scrollbar-color: var(--primary) transparent;
 }
 
 #chatbot::-webkit-scrollbar {
@@ -159,14 +158,13 @@ css = """
 
 /* Input area */
 .input-area {
-    position: sticky;
-    bottom: 0;
+    display: flex;
+    gap: 8px;
+    padding: 16px;
     background: var(--bg-glass);
-    backdrop-filter: blur(10px);
-    border-top: 1px solid var(--border-glass);
-    padding: 1rem;
-    margin-top: auto;
-    z-index: 10;
+    border-radius: 12px;
+    margin-top: 16px;
+    border: 1px solid var(--border-glass);
 }
 
 .input-area input {
@@ -386,35 +384,12 @@ css = """
 
 /* Responsive design */
 @media (max-width: 768px) {
+    .sidebar {
+        display: none;
+    }
+
     .chat-container {
-        height: calc(100vh - 180px);
-        min-height: 300px;
-    }
-
-    #chatbot {
-        height: calc(100% - 100px) !important;
-        min-height: 200px;
-    }
-
-    .input-area {
-        padding: 0.75rem;
-    }
-}
-
-/* For very small screens */
-@media (max-width: 480px) {
-    .chat-container {
-        height: calc(100vh - 160px);
-        min-height: 250px;
-    }
-
-    #chatbot {
-        height: calc(100% - 80px) !important;
-        min-height: 150px;
-    }
-
-    .input-area {
-        padding: 0.5rem;
+        height: calc(100vh - 120px);
     }
 }
 
@@ -580,7 +555,7 @@ def process_message(
     try:
         # Clear only if duplicate exists - preserve previous conversation
         if state["messages"] and state["messages"][-1]["role"] == "user":
-            state["messages"] = state["messages"][:-1]  # Remove last user message
+            state["messages"] = state["messages"][:-1]  # Remove last user message if duplicate
 
         # If order ID is provided, use it
         if order_id and order_id.strip():
@@ -589,13 +564,14 @@ def process_message(
         # Sanitize input
         message = bleach.clean(message)
 
-        # Convert history to the correct format
+        # Convert history to the correct format if needed
         formatted_history = []
         if history:
             for h in history:
                 if isinstance(h, tuple):
                     user_msg, assistant_msg = h
-                    formatted_history.append({"role": "user", "content": user_msg})
+                    if user_msg:
+                        formatted_history.append({"role": "user", "content": user_msg})
                     if assistant_msg:
                         formatted_history.append({"role": "assistant", "content": assistant_msg})
                 elif isinstance(h, dict):
@@ -604,8 +580,9 @@ def process_message(
         # Update state with formatted history
         state["messages"] = formatted_history
 
-        # Add the new user message to state
-        state["messages"].append({"role": "user", "content": message})
+        # Add the new user message to state only once
+        if not state["messages"] or state["messages"][-1]["role"] != "user":
+            state["messages"].append({"role": "user", "content": message})
 
         # Show typing indicator
         yield formatted_history, state, "typing-indicator active"
@@ -613,36 +590,47 @@ def process_message(
         # Process message
         updated_state = chat_with_user(message, state)
 
-        # Get assistant response
-        if updated_state and "messages" in updated_state and updated_state["messages"]:
-            assistant_messages = [msg for msg in updated_state["messages"] if msg["role"] == "assistant"]
+        # Get assistant response without duplication
+        if updated_state and "messages" in updated_state:
+            assistant_messages = [msg for msg in updated_state["messages"] 
+                               if msg["role"] == "assistant" 
+                               and msg not in state["messages"]]  # Prevent duplicates
+            
             if assistant_messages:
                 assistant_message = assistant_messages[-1]["content"]
-                updated_state["messages"] = state["messages"] + [{"role": "assistant", "content": assistant_message}]
+                state["messages"].append({"role": "assistant", "content": assistant_message})
             else:
-                updated_state["messages"] = state["messages"] + [{"role": "assistant", "content": "I apologize, but I encountered an error processing your request."}]
+                state["messages"].append({
+                    "role": "assistant", 
+                    "content": "I apologize, but I encountered an error processing your request."
+                })
 
-        # Save to chat history
-        updated_state["chat_history"] = updated_state["messages"]
+        # Save to chat history without duplicates
+        state["chat_history"] = state["messages"]
 
         # Hide typing indicator
-        yield updated_state["messages"], updated_state, "typing-indicator"
+        yield state["messages"], state, "typing-indicator"
 
     except Exception as e:
-        print(f"Error processing message: {e}")
-        # Ensure we always return something even if there's an error
-        if isinstance(history, list) and len(history) > 0:
-            if isinstance(history[-1], dict) and history[-1]["role"] == "assistant":
-                history[-1]["content"] = "I apologize, but I encountered an error processing your request."
-            elif isinstance(history[-1], tuple) and history[-1][1] is None:
-                history[-1] = (message, "I apologize, but I encountered an error processing your request.")
-        yield history, state, "typing-indicator"
+        logger.error(f"Error processing message: {e}", exc_info=True)
+        # Return a single error message without duplicating
+        if state["messages"] and state["messages"][-1]["role"] == "assistant":
+            # Update last assistant message instead of adding new one
+            state["messages"][-1]["content"] = "I apologize, but I encountered an error processing your request."
+        else:
+            state["messages"].append({
+                "role": "assistant",
+                "content": "I apologize, but I encountered an error processing your request."
+            })
+        yield state["messages"], state, "typing-indicator"
 
 def clear_conversation(state: Dict[str, Any]) -> Tuple[List, Dict[str, Any]]:
     """Clear the conversation history."""
     new_state = reset_state()
-    new_state["session_id"] = state.get("session_id", datetime.now().strftime("%Y%m%d%H%M%S"))
-    new_state["type"] = "messages"  # Force correct type
+    new_state["session_id"] = datetime.now().strftime("%Y%m%d%H%M%S")
+    new_state["type"] = "messages"
+    new_state["messages"] = []  # Ensure messages are empty
+    new_state["chat_history"] = []  # Ensure chat history is empty
     return [], new_state
 
 def submit_feedback(feedback: str, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -679,17 +667,22 @@ def use_suggestion(suggestion_text: str, state: Dict[str, Any]) -> Tuple[str, Di
     return suggestion_text, state
 
 def track_order(order_id: str, state: Dict[str, Any]) -> Tuple[List[Tuple[str, str]], Dict[str, Any], str]:
-    """Track an order by ID."""
     if not order_id.strip():
-        return [], state, ""
-
-    # Process and unpack the generator
-    processed = process_message(
-        f"What's the status of my order {order_id.strip()}?",
-        state["chat_history"],
-        state
-    )
-    return next(processed)  # Get the first yield value from generator
+        error_message = {"role": "assistant", "content": "Please provide a valid order ID."}
+        return state["messages"] + [error_message], state, ""
+    
+    try:
+        # Process order lookup
+        processed = process_message(
+            f"What's the status of my order {order_id.strip()}?",
+            state["chat_history"],
+            state
+        )
+        return next(processed)
+    except Exception as e:
+        print(f"Error tracking order: {e}")
+        error_message = {"role": "assistant", "content": "I'm sorry, I couldn't find information for that order ID. Please verify the order ID and try again."}
+        return state["messages"] + [error_message], state, ""
 
 def get_faq_response(faq_key: str, state: Dict[str, Any]) -> Tuple[List, Dict[str, Any], str]:
     """Get a response for a FAQ."""
@@ -857,7 +850,7 @@ with gr.Blocks(theme=theme, css=css) as demo:
                 elem_id="chatbot",
                 avatar_images=("👤", "🤖"),
                 show_copy_button=True,
-                height="100%",
+                height=500,
                 type="messages"
             )
 
