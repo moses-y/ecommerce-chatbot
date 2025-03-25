@@ -585,58 +585,39 @@ def process_message(
                 elif isinstance(h, dict):
                     formatted_history.append(h)
 
-        # Update state and conversation memory
+        # Update state
         state["messages"] = formatted_history
         if not state["messages"] or state["messages"][-1]["role"] != "user":
             state["messages"].append({"role": "user", "content": message})
-            # Update conversation memory
-            conversation_memory.add_message("user", message)
 
         # Show typing indicator
         yield formatted_history, state, "typing-indicator active"
 
-        # First try to get direct order status if it's an order query
-        if order_id or re.search(r'\b([a-f0-9]{32})\b', message):
-            extracted_id = order_id or re.search(r'\b([a-f0-9]{32})\b', message).group(1)
-            try:
-                status, details = order_service.lookup_order_by_id(extracted_id)
-                
-                if status is not None:
-                    # We found the order, format and return response
-                    response = format_order_details(extracted_id, status, details)
-                    state["messages"].append({"role": "assistant", "content": response})
-                    # Update conversation memory with order details
-                    conversation_memory.update_key_details("current_order_id", extracted_id)
-                    conversation_memory.add_message("assistant", response)
-                    state["order_lookup_attempted"] = True
-                    yield state["messages"], state, "typing-indicator"
-                    return
-            except Exception as e:
-                logger.error(f"Error looking up order: {e}")
-                # Don't add error message here, let it fall through to chat processing
-
+        # Process through chatbot
         try:
-            # Get response using LLM service
-            llm_response = llm_service.generate_response(
-                state["messages"],
-                conversation_memory
-            )
+            updated_state = chat_with_user(message, state)
             
-            if llm_response:
-                state["messages"].append({"role": "assistant", "content": llm_response})
-                conversation_memory.add_message("assistant", llm_response)
-            else:
-                raise Exception("No valid response generated")
-                
+            # Add any new messages from the updated state
+            if updated_state and "messages" in updated_state:
+                new_messages = [msg for msg in updated_state["messages"] 
+                              if msg not in state["messages"]]
+                if new_messages:
+                    state["messages"].extend(new_messages)
+                    
+                # Update other state properties
+                for key in ["order_lookup_attempted", "current_order_id", "needs_human_agent", 
+                          "contact_info_collected", "customer_name", "customer_email", 
+                          "customer_phone", "contact_step"]:
+                    if key in updated_state:
+                        state[key] = updated_state[key]
+
         except Exception as e:
-            logger.error(f"Error in LLM processing: {e}")
+            logger.error(f"Error in chat processing: {e}")
             if not any(msg["role"] == "assistant" for msg in state["messages"]):
-                error_msg = "I apologize, but I encountered an error processing your request."
                 state["messages"].append({
                     "role": "assistant",
-                    "content": error_msg
+                    "content": "I apologize, but I encountered an error processing your request."
                 })
-                conversation_memory.add_message("assistant", error_msg)
 
         # Save to chat history
         state["chat_history"] = state["messages"]
@@ -647,21 +628,6 @@ def process_message(
     except Exception as e:
         logger.error(f"Error in process_message: {e}", exc_info=True)
         if not any(msg["role"] == "assistant" for msg in state["messages"]):
-            error_msg = "I apologize, but I encountered an error processing your request."
-            state["messages"].append({
-                "role": "assistant",
-                "content": error_msg
-            })
-            conversation_memory.add_message("assistant", error_msg)
-        yield state["messages"], state, "typing-indicator"
-
-    except Exception as e:
-        logger.error(f"Error processing message: {e}", exc_info=True)
-        # Return a single error message without duplicating
-        if state["messages"] and state["messages"][-1]["role"] == "assistant":
-            # Update last assistant message instead of adding new one
-            state["messages"][-1]["content"] = "I apologize, but I encountered an error processing your request."
-        else:
             state["messages"].append({
                 "role": "assistant",
                 "content": "I apologize, but I encountered an error processing your request."
