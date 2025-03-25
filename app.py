@@ -1165,6 +1165,7 @@ def initialize_app():
         raise
 
 # ===== Launch the app =====
+
 if __name__ == "__main__":
     try:
         # Try to configure logging, but continue if it fails
@@ -1176,13 +1177,14 @@ if __name__ == "__main__":
         # Initialize application
         initialize_app()
         
-        # Add health check endpoint
+        # Add health check endpoint if needed
         # demo.add_api_route("/health", health_check, methods=["GET"])
         
         # Get server configuration
         server_config = get_server_config()
         
-        # Launch the app with production configuration
+        # Launch the app with production configuration.
+        # Removed unsupported keyword arguments such as cache_examples, max_queue_size, queue_callbacks, show_api, and analytics_enabled.
         demo.launch(
             server_name=server_config["server_name"],
             server_port=server_config["server_port"],
@@ -1191,20 +1193,14 @@ if __name__ == "__main__":
             ssl_keyfile=server_config["ssl_keyfile"],
             ssl_certfile=server_config["ssl_certfile"],
             ssl_keyfile_password=server_config["ssl_keyfile_password"],
-            #enable_queue=True,
             max_threads=40,
             show_error=True,
-            cache_examples=True,
-            max_queue_size=100,
             root_path="",
             concurrency_count=4,
             startup_timeout=60,
             favicon_path="assets/favicon.ico",
             allowed_paths=["assets"],
-            blocked_paths=["data", "logs", "config"],
-            queue_callbacks=True,
-            show_api=False,
-            analytics_enabled=False
+            blocked_paths=["data", "logs", "config"]
         )
         
         logger.info("Application launched successfully")
