@@ -56,6 +56,8 @@ from src.vector_db import (
     cached_get_order_by_id,
     cached_get_orders_by_customer_id
 )
+# Add after your imports, before initializing services
+from utils.credentials import verify_credentials
 
 conversation_memory = ConversationMemory(
     max_history=CONVERSATION_CONFIG["max_history_length"]
@@ -63,6 +65,18 @@ conversation_memory = ConversationMemory(
 
 # Add this after the imports to maintain backward compatibility
 FAQ_RESPONSES = FAQ_CONFIG["responses"]
+
+# Verify credentials before initializing services
+try:
+    cred_results = verify_credentials(["GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"])
+    if not all(cred_results.values()):
+        missing_creds = [k for k, v in cred_results.items() if not v]
+        raise EnvironmentError(f"Missing required credentials: {missing_creds}")
+except Exception as e:
+    logger.error(f"Failed to verify credentials: {e}")
+    raise
+
+
 # ===== Cached Data =====
 
 # Load cached data
@@ -178,10 +192,15 @@ class ContactService:
 # ===== Initialize Services =====
 # ===== Service Layer =====
 
-# Initialize services (do this only once)
-llm_service = LLMService()
-order_service = OrderService()
-contact_service = ContactService()
+# Replace the current service initialization with:
+try:
+    llm_service = LLMService()
+    order_service = OrderService()
+    contact_service = ContactService()
+    logger.info("Successfully initialized all services")
+except Exception as e:
+    logger.error(f"Failed to initialize services: {e}")
+    raise
 
 
 # ===== Node Functions =====
@@ -438,46 +457,58 @@ def router(state: ChatbotState):
 
 def create_chatbot():
     """Initialize and return the e-commerce support chatbot with enhanced conversation handling."""
-    workflow = StateGraph(ChatbotState)
-    
-    def enhanced_continue_conversation(state: ChatbotState) -> ChatbotState:
-        """Enhanced conversation handling with better context management."""
-        messages = state["messages"]
-        last_message = messages[-1]["content"].lower()
-        new_state = state.copy()
+    try:
+        # Verify credentials are still valid
+        verify_credentials(["GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"])
         
-        # Update conversation memory
-        conversation_memory.add_message("user", last_message)
+        workflow = StateGraph(ChatbotState)
         
-        # Update key details if available
-        if state.get("current_order_id"):
-            conversation_memory.update_key_details("current_order_id", state["current_order_id"])
-        if state.get("customer_name"):
-            conversation_memory.update_key_details("customer_name", state["customer_name"])
+        def enhanced_continue_conversation(state: ChatbotState) -> ChatbotState:
+            """Enhanced conversation handling with better context management."""
+            try:
+                messages = state["messages"]
+                last_message = messages[-1]["content"].lower()
+                new_state = state.copy()
+                
+                # Update conversation memory
+                conversation_memory.add_message("user", last_message)
+                
+                # Update key details if available
+                if state.get("current_order_id"):
+                    conversation_memory.update_key_details("current_order_id", state["current_order_id"])
+                if state.get("customer_name"):
+                    conversation_memory.update_key_details("customer_name", state["customer_name"])
+                
+                # Generate response using enhanced LLM service
+                response_text = llm_service.generate_response(messages, conversation_memory)
+                
+                # Update conversation memory with assistant's response
+                conversation_memory.add_message("assistant", response_text)
+                
+                # Update state
+                new_state["messages"].append({"role": "assistant", "content": response_text})
+                return new_state
+            except Exception as e:
+                logger.error(f"Error in enhanced conversation: {e}")
+                raise
         
-        # Generate response using enhanced LLM service
-        response_text = llm_service.generate_response(messages, conversation_memory)
+        # Update the workflow with the enhanced conversation handler
+        workflow.add_node("continue_conversation", enhanced_continue_conversation)
+        workflow.add_node("lookup_order", lookup_order)
+        workflow.add_node("collect_contact_info", collect_contact_info)
         
-        # Update conversation memory with assistant's response
-        conversation_memory.add_message("assistant", response_text)
+        # Add conditional edges
+        workflow.add_conditional_edges("continue_conversation", router)
+        workflow.add_conditional_edges("lookup_order", router)
+        workflow.add_conditional_edges("collect_contact_info", router)
         
-        # Update state
-        new_state["messages"].append({"role": "assistant", "content": response_text})
-        return new_state
-    
-    # Update the workflow with the enhanced conversation handler
-    workflow.add_node("continue_conversation", enhanced_continue_conversation)
-    workflow.add_node("lookup_order", lookup_order)
-    workflow.add_node("collect_contact_info", collect_contact_info)
-    
-    # Add conditional edges
-    workflow.add_conditional_edges("continue_conversation", router)
-    workflow.add_conditional_edges("lookup_order", router)
-    workflow.add_conditional_edges("collect_contact_info", router)
-    
-    workflow.set_entry_point("continue_conversation")
-    
-    return workflow.compile()
+        workflow.set_entry_point("continue_conversation")
+        
+        return workflow.compile()
+        
+    except Exception as e:
+        logger.error(f"Failed to create chatbot: {e}")
+        raise
 
 # ===== Intent Detection =====
 
@@ -512,212 +543,221 @@ def detect_intent(message: str) -> Optional[str]:
 
 def chat_with_user(user_input: str, chat_state: Optional[Dict] = None) -> Dict:
     """Process a single user message and return updated state."""
-    if chat_state is None:
-        chat_state = reset_state()
+    try:
+        if chat_state is None:
+            chat_state = reset_state()
 
-    # Only add user message if not already present
-    if not chat_state["messages"] or chat_state["messages"][-1]["content"] != user_input:
-        chat_state["messages"].append({"role": "user", "content": user_input})
+        # Verify credentials before processing
+        cred_results = verify_credentials(["GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"])
+        if not all(cred_results.values()):
+            raise EnvironmentError("Missing required credentials")
 
-    # Check for FAQs FIRST, before any other processing
-    intent = detect_intent(user_input.lower())  # Convert to lowercase once
-    if intent and intent in FAQ_RESPONSES and intent not in ["greeting", "goodbye", "human_agent", "order_status"]:
-        # Only process direct FAQ responses here
-        chat_state["messages"].append({"role": "assistant", "content": FAQ_RESPONSES[intent]})
-        return chat_state
+        # Only add user message if not already present
+        if not chat_state["messages"] or chat_state["messages"][-1]["content"] != user_input:
+            chat_state["messages"].append({"role": "user", "content": user_input})
 
-    # Check if user wants to cancel human agent request
-    if chat_state.get("needs_human_agent") and not chat_state.get("contact_info_collected"):
-        cancel_keywords = ["cancel", "nevermind", "never mind", "stop", "go back", "different question"]
-        customer_id_keywords = ["customer id", "my id", "delivery status", "order status", "track"]
-
-        if any(keyword in user_input.lower() for keyword in cancel_keywords) or any(keyword in user_input.lower() for keyword in customer_id_keywords):
-            # Reset the human agent flow
-            chat_state["needs_human_agent"] = False
-            chat_state["contact_step"] = 0
-
-            # If they're asking about customer ID specifically
-            if any(keyword in user_input.lower() for keyword in customer_id_keywords):
-                response = "I understand you'd like to check your order status using your customer ID. Could you please provide your customer ID? It should be a 32-character alphanumeric code."
-                chat_state["messages"].append({"role": "assistant", "content": response})
-                return chat_state
-            else:
-                response = "I've canceled the request to speak with a human representative. How else can I help you today?"
-                chat_state["messages"].append({"role": "assistant", "content": response})
-                return chat_state
-
-    # Handle human agent requests
-    if intent == "human_agent" and not chat_state.get("needs_human_agent"):
-        chat_state["needs_human_agent"] = True
-        chat_state["contact_step"] = 0  # Reset step counter
-        chat_state["messages"].append({
-            "role": "assistant",
-            "content": "I'll connect you with a human representative. Could you please provide your name?"
-        })
-        chat_state["contact_step"] = 1  # Move to next step
-        return chat_state
-
-    # Direct handling of contact info collection
-    if chat_state.get("needs_human_agent") and not chat_state.get("contact_info_collected"):
-        step = chat_state.get("contact_step", 0)
-
-        if step == 1:  # We asked for name
-            chat_state["customer_name"] = user_input
-            chat_state["contact_step"] = 2
-            chat_state["messages"].append({
-                "role": "assistant",
-                "content": f"Thank you, {chat_state['customer_name']}. Could you please provide your email address?"
-            })
-            return chat_state
-        elif step == 2:  # We asked for email
-            chat_state["customer_email"] = user_input
-            chat_state["contact_step"] = 3
-            chat_state["messages"].append({
-                "role": "assistant",
-                "content": "Thank you. Finally, could you please provide your phone number?"
-            })
-            return chat_state
-        elif step == 3:  # We asked for phone
-            chat_state["customer_phone"] = user_input
-            chat_state["contact_info_collected"] = True
-            chat_state["contact_step"] = 4
-
-            # Save contact info to CSV
-            success = contact_service.save_contact_info(
-                chat_state["customer_name"],
-                chat_state["customer_email"],
-                chat_state["customer_phone"]
-            )
-
-            if success:
-                chat_state["messages"].append({
-                    "role": "assistant",
-                    "content": f"Thank you for providing your information. A customer service representative will contact you soon at {chat_state['customer_email']} or {chat_state['customer_phone']}. Is there anything else you'd like to add before I submit your request?"
-                })
-            else:
-                chat_state["messages"].append({
-                    "role": "assistant",
-                    "content": "Thank you for providing your information. I encountered an issue saving your contact details, but a customer service representative will be notified. Is there anything specific you'd like me to tell them about your inquiry?"
-                })
+        # Check for FAQs first
+        intent = detect_intent(user_input.lower())
+        if intent and intent in FAQ_RESPONSES and intent not in ["greeting", "goodbye", "human_agent", "order_status"]:
+            chat_state["messages"].append({"role": "assistant", "content": FAQ_RESPONSES[intent]})
             return chat_state
 
-    # Direct handling of order lookups with IDs
-    if not chat_state.get("order_lookup_attempted") and re.search(r'\b([a-f0-9]{32})\b', user_input):
-        id_match = re.search(r'\b([a-f0-9]{32})\b', user_input)
-        extracted_id = id_match.group(1)
-        logger.info(f"Attempting direct lookup for ID: {extracted_id}")
+        # Check if user wants to cancel human agent request
+        if chat_state.get("needs_human_agent") and not chat_state.get("contact_info_collected"):
+            cancel_keywords = ["cancel", "nevermind", "never mind", "stop", "go back", "different question"]
+            customer_id_keywords = ["customer id", "my id", "delivery status", "order status", "track"]
 
-        try:
-            # Try as order ID first
-            status, details = order_service.lookup_order_by_id(extracted_id)
+            if any(keyword in user_input.lower() for keyword in cancel_keywords) or any(keyword in user_input.lower() for keyword in customer_id_keywords):
+                chat_state["needs_human_agent"] = False
+                chat_state["contact_step"] = 0
 
-            if status:
-                # Found as order ID
-                response = format_order_details(extracted_id, status, details)
-                chat_state["messages"].append({"role": "assistant", "content": response})
-                chat_state["order_lookup_attempted"] = True
-                chat_state["current_order_id"] = extracted_id
-                return chat_state
-
-            # Try as customer ID
-            customer_orders = order_service.lookup_orders_by_customer_id(extracted_id)
-
-            if customer_orders:
-                if len(customer_orders) == 1:
-                    # Only one order for this customer
-                    order_data = customer_orders[0]
-                    order_id = order_data['order_id']
-                    status = order_data['order_status']
-                    details = {
-                        'purchase_date': order_data['order_purchase_timestamp'],
-                        'delivery_date': order_data['order_delivered_customer_date'],
-                        'approved_date': order_data['order_approved_at'],
-                        'estimated_delivery': order_data['order_estimated_delivery_date'],
-                        'actual_delivery': order_data['order_delivered_customer_date']
-                    }
-                    response = f"I found an order for your customer ID. {format_order_details(order_id, status, details)}"
+                if any(keyword in user_input.lower() for keyword in customer_id_keywords):
+                    response = "I understand you'd like to check your order status using your customer ID. Could you please provide your customer ID? It should be a 32-character alphanumeric code."
+                    chat_state["messages"].append({"role": "assistant", "content": response})
+                    return chat_state
                 else:
-                    # Multiple orders for this customer
-                    sorted_orders = sorted(customer_orders,
-                                        key=lambda x: pd.to_datetime(x['order_purchase_timestamp']),
-                                        reverse=True)
-                    recent_order = sorted_orders[0]
-                    order_id = recent_order['order_id']
-                    status = recent_order['order_status']
-                    details = {
-                        'purchase_date': recent_order['order_purchase_timestamp'],
-                        'delivery_date': recent_order['order_delivered_customer_date'],
-                        'approved_date': recent_order['order_approved_at'],
-                        'estimated_delivery': recent_order['order_estimated_delivery_date'],
-                        'actual_delivery': recent_order['order_delivered_customer_date']
-                    }
-                    response = f"I found {len(customer_orders)} orders for your customer ID. Here's the status of your most recent order: {format_order_details(order_id, status, details)}"
+                    response = "I've canceled the request to speak with a human representative. How else can I help you today?"
+                    chat_state["messages"].append({"role": "assistant", "content": response})
+                    return chat_state
 
-                chat_state["messages"].append({"role": "assistant", "content": response})
-                chat_state["order_lookup_attempted"] = True
-                chat_state["current_order_id"] = order_id
-                return chat_state
-
-            # Not found as either order ID or customer ID
-            response = f"I couldn't find any orders with ID {extracted_id}. Please check the ID and try again."
-            chat_state["messages"].append({"role": "assistant", "content": response})
-            chat_state["order_lookup_attempted"] = True
+        # Handle human agent requests
+        if intent == "human_agent" and not chat_state.get("needs_human_agent"):
+            chat_state["needs_human_agent"] = True
+            chat_state["contact_step"] = 1
+            chat_state["messages"].append({
+                "role": "assistant",
+                "content": "I'll connect you with a human representative. Could you please provide your name?"
+            })
             return chat_state
 
-        except Exception as e:
-            logger.error(f"Direct lookup failed: {e}")
-            # Continue with graph-based processing
+        # Direct handling of contact info collection
+        if chat_state.get("needs_human_agent") and not chat_state.get("contact_info_collected"):
+            step = chat_state.get("contact_step", 0)
 
-    # General order status question without specific ID
-    if intent == "order_status" and not chat_state.get("order_lookup_attempted"):
-        response = """To check your order status, I'll need your order ID or customer ID.
+            if step == 1:  # Name collection
+                chat_state["customer_name"] = user_input
+                chat_state["contact_step"] = 2
+                chat_state["messages"].append({
+                    "role": "assistant",
+                    "content": f"Thank you, {chat_state['customer_name']}. Could you please provide your email address?"
+                })
+                return chat_state
+            elif step == 2:  # Email collection
+                chat_state["customer_email"] = user_input
+                chat_state["contact_step"] = 3
+                chat_state["messages"].append({
+                    "role": "assistant",
+                    "content": "Thank you. Finally, could you please provide your phone number?"
+                })
+                return chat_state
+            elif step == 3:  # Phone collection
+                chat_state["customer_phone"] = user_input
+                chat_state["contact_info_collected"] = True
+                chat_state["contact_step"] = 4
+
+                success = contact_service.save_contact_info(
+                    chat_state["customer_name"],
+                    chat_state["customer_email"],
+                    chat_state["customer_phone"]
+                )
+
+                response = (
+                    f"Thank you for providing your information. A customer service representative will contact you soon at {chat_state['customer_email']} or {chat_state['customer_phone']}. Is there anything else you'd like to add before I submit your request?"
+                    if success else
+                    "Thank you for providing your information. I encountered an issue saving your contact details, but a customer service representative will be notified. Is there anything specific you'd like me to tell them about your inquiry?"
+                )
+                chat_state["messages"].append({"role": "assistant", "content": response})
+                return chat_state
+
+        # Direct handling of order lookups with IDs
+        if not chat_state.get("order_lookup_attempted") and re.search(r'\b([a-f0-9]{32})\b', user_input):
+            id_match = re.search(r'\b([a-f0-9]{32})\b', user_input)
+            extracted_id = id_match.group(1)
+            logger.info(f"Attempting direct lookup for ID: {extracted_id}")
+
+            try:
+                status, details = order_service.lookup_order_by_id(extracted_id)
+
+                if status:
+                    response = format_order_details(extracted_id, status, details)
+                    chat_state["messages"].append({"role": "assistant", "content": response})
+                    chat_state["order_lookup_attempted"] = True
+                    chat_state["current_order_id"] = extracted_id
+                    return chat_state
+
+                customer_orders = order_service.lookup_orders_by_customer_id(extracted_id)
+
+                if customer_orders:
+                    if len(customer_orders) == 1:
+                        order_data = customer_orders[0]
+                        order_id = order_data['order_id']
+                        status = order_data['order_status']
+                        details = {
+                            'purchase_date': order_data['order_purchase_timestamp'],
+                            'delivery_date': order_data['order_delivered_customer_date'],
+                            'approved_date': order_data['order_approved_at'],
+                            'estimated_delivery': order_data['order_estimated_delivery_date'],
+                            'actual_delivery': order_data['order_delivered_customer_date']
+                        }
+                        response = f"I found an order for your customer ID. {format_order_details(order_id, status, details)}"
+                    else:
+                        sorted_orders = sorted(customer_orders,
+                                            key=lambda x: pd.to_datetime(x['order_purchase_timestamp']),
+                                            reverse=True)
+                        recent_order = sorted_orders[0]
+                        order_id = recent_order['order_id']
+                        status = recent_order['order_status']
+                        details = {
+                            'purchase_date': recent_order['order_purchase_timestamp'],
+                            'delivery_date': recent_order['order_delivered_customer_date'],
+                            'approved_date': recent_order['order_approved_at'],
+                            'estimated_delivery': recent_order['order_estimated_delivery_date'],
+                            'actual_delivery': recent_order['order_delivered_customer_date']
+                        }
+                        response = f"I found {len(customer_orders)} orders for your customer ID. Here's the status of your most recent order: {format_order_details(order_id, status, details)}"
+
+                    chat_state["messages"].append({"role": "assistant", "content": response})
+                    chat_state["order_lookup_attempted"] = True
+                    chat_state["current_order_id"] = order_id
+                    return chat_state
+
+                response = f"I couldn't find any orders with ID {extracted_id}. Please check the ID and try again."
+                chat_state["messages"].append({"role": "assistant", "content": response})
+                chat_state["order_lookup_attempted"] = True
+                return chat_state
+
+            except Exception as e:
+                logger.error(f"Direct lookup failed: {e}")
+
+        # General order status question without specific ID
+        if intent == "order_status" and not chat_state.get("order_lookup_attempted"):
+            response = """To check your order status, I'll need your order ID or customer ID.
 
 The order ID is a 32-character code that was included in your order confirmation email. It looks something like: e481f51cbdc54678b7cc49136f2d6af7
 
 Could you please provide your order ID?"""
-        chat_state["messages"].append({"role": "assistant", "content": response})
-        return chat_state
+            chat_state["messages"].append({"role": "assistant", "content": response})
+            return chat_state
 
-    # Process through chatbot for all other cases
-    try:
-        chatbot = create_chatbot()
-        result = chatbot.invoke(chat_state, config={"recursion_limit": 30})
-        return result
-    except Exception as e:
-        logger.error(f"Error in chatbot processing: {e}")
+        # Process through chatbot for all other cases
+        try:
+            chatbot = create_chatbot()
+            result = chatbot.invoke(chat_state, config={"recursion_limit": 30})
+            return result
+        except Exception as e:
+            logger.error(f"Error in chatbot processing: {e}")
+            chat_state["messages"].append({
+                "role": "assistant",
+                "content": "I'm sorry, I don't have specific information about that. Would you like to ask about our return policy, shipping options, order status, or speak with a human representative?"
+            })
+            return chat_state
+
+    except EnvironmentError as e:
+        logger.error(f"Credential error in chat_with_user: {e}")
+        if chat_state is None:
+            chat_state = reset_state()
         chat_state["messages"].append({
             "role": "assistant",
-            "content": "I'm sorry, I don't have specific information about that. Would you like to ask about our return policy, shipping options, order status, or speak with a human representative?"
+            "content": "I'm sorry, but I'm having trouble accessing my services right now. Please try again later or contact support."
+        })
+        return chat_state
+    except Exception as e:
+        logger.error(f"Error in chat_with_user: {e}")
+        if chat_state is None:
+            chat_state = reset_state()
+        chat_state["messages"].append({
+            "role": "assistant",
+            "content": "I apologize, but I encountered an error. Would you like to try asking your question again?"
         })
         return chat_state
 
 # ===== CLI Interface =====
 
 if __name__ == "__main__":
-    # Simple CLI for testing
-    print("E-commerce Support Chatbot (type 'exit' to quit)")
-    state = {
-        "messages": [],
-        "order_lookup_attempted": False,
-        "current_order_id": None,
-        "needs_human_agent": False,
-        "contact_info_collected": False,
-        "customer_name": None,
-        "customer_email": None,
-        "customer_phone": None,
-        "contact_step": 0
-    }
+    try:
+        # Verify credentials before starting CLI
+        verify_credentials(["GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"])
+        
+        print("E-commerce Support Chatbot (type 'exit' to quit)")
+        state = reset_state()  # Use the reset_state function instead of manual initialization
 
-    while True:
-        user_input = input("\nYou: ")
-        if user_input.lower() == "exit":
-            break
+        while True:
+            user_input = input("\nYou: ")
+            if user_input.lower() == "exit":
+                break
 
-        state = chat_with_user(user_input, state)
-        assistant_message = state["messages"][-1]["content"]
-        print(f"\nAssistant: {assistant_message}")
+            try:
+                state = chat_with_user(user_input, state)
+                assistant_message = state["messages"][-1]["content"]
+                print(f"\nAssistant: {assistant_message}")
 
-        # Check if conversation has ended
-        if state.get("needs_human_agent") and state.get("contact_info_collected"):
-            print("\nConversation has been handed off to a human representative.")
-            break
+                if state.get("needs_human_agent") and state.get("contact_info_collected"):
+                    print("\nConversation has been handed off to a human representative.")
+                    break
+            except Exception as e:
+                logger.error(f"Error processing message: {e}")
+                print("\nAssistant: I apologize, but I encountered an error. Please try again.")
+
+    except Exception as e:
+        logger.error(f"Failed to start chatbot: {e}")
+        print("Error: Could not start chatbot. Please check your credentials and try again.")
