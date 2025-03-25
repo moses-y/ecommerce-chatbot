@@ -40,8 +40,10 @@ from langgraph.graph import StateGraph, END
 load_dotenv()
 
 # Import local modules
-from src.config import SYSTEM_PROMPT, ORDER_STATUS_DESCRIPTIONS, API_CONFIG
+from src.config import ORDER_STATUS_DESCRIPTIONS,CONVERSATION_CONFIG
 from src.utils import load_order_data, get_order_status, format_order_details, create_order_index
+from src.state_management import ConversationMemory
+from src.llm_service import LLMService
 
 # Import vector database functions - these are imported here to avoid circular imports
 # The vector_db module should not import from chatbot
@@ -53,6 +55,18 @@ from src.vector_db import (
     cached_get_order_by_id,
     cached_get_orders_by_customer_id
 )
+
+conversation_memory = ConversationMemory(
+    max_history=CONVERSATION_CONFIG["max_history_length"]
+)
+
+# ===== Cached Data =====
+
+# Load cached data
+@lru_cache(maxsize=1)
+def load_order_data_cached():
+    """Load order data with caching for better performance."""
+    return load_order_data()
 
 # ===== Domain Models =====
 
@@ -71,82 +85,6 @@ class ChatbotState(TypedDict):
     session_id: str
     feedback: Optional[str]
     type: str
-
-# ===== Service Layer =====
-
-class LLMService:
-    """Service for interacting with language models."""
-
-    def __init__(self):
-        """Initialize the LLM service with fallback options."""
-        self.llm = self._initialize_llm()
-
-    def _initialize_llm(self):
-        """Initialize the LLM with fallback options."""
-        try:
-            # Initialize LLM with Gemini
-            llm = ChatGoogleGenerativeAI(
-                model=API_CONFIG["gemini"]["model"],
-                temperature=API_CONFIG["gemini"]["temperature"],
-                google_api_key=os.getenv("GOOGLE_API_KEY"),
-                convert_system_message_to_human=True,
-                timeout=API_CONFIG["gemini"]["timeout_seconds"]
-            )
-            logger.info("Using Gemini API")
-            return llm
-        except Exception as e:
-            logger.warning(f"Gemini API error: {e}. Could not initialize Gemini API.")
-            # Skipping OpenAI fallback if OPENAI_API_KEY is not set
-            if not os.getenv("OPENAI_API_KEY"):
-                logger.warning("OpenAI API key is not set. Skipping OpenAI initialization.")
-                return None
-            # Initialize OpenAI as fallback
-            try:
-                llm = ChatOpenAI(
-                    model=API_CONFIG["openai"]["model"],
-                    temperature=API_CONFIG["openai"]["temperature"],
-                    api_key=os.getenv("OPENAI_API_KEY"),  # Ensure the API key is set
-                    max_tokens=API_CONFIG["openai"]["max_tokens"],
-                    request_timeout=API_CONFIG["openai"]["timeout_seconds"]
-                )
-                logger.info("Using OpenAI API")
-                return llm
-            except Exception as e:
-                logger.error(f"OpenAI API error: {e}. Could not initialize OpenAI API.")
-                raise Exception("LLM initialization failed due to missing API keys.")
-
-    def generate_response(self, messages: List[Dict[str, Any]]) -> str:
-        """Generate a response using the LLM."""
-        # Format conversation history for the LLM
-        prompt_messages = [
-            SystemMessage(content=SYSTEM_PROMPT or "You are a helpful e-commerce support assistant."),
-        ]
-
-        # Ensure no empty messages are sent to the API
-        for message in messages:
-            if message["role"] == "user" and message["content"].strip():
-                prompt_messages.append(HumanMessage(content=message["content"]))
-            elif message["role"] == "assistant" and message["content"].strip():
-                prompt_messages.append(AIMessage(content=message["content"]))
-
-        # Generate response with better error handling
-        try:
-            response = self.llm.invoke(prompt_messages)
-            return response.content
-        except Exception as e:
-            logger.error(f"Error generating response: {e}")
-            # More robust fallback
-            try:
-                # Try with a simpler prompt if the full conversation fails
-                simple_prompt = [
-                    SystemMessage(content="You are a helpful e-commerce support assistant."),
-                    HumanMessage(content=messages[-1]["content"])
-                ]
-                response = self.llm.invoke(simple_prompt)
-                return response.content
-            except Exception as e2:
-                logger.error(f"Fallback also failed: {e2}")
-                return "I'm having trouble processing your request. Could you please try again?"
 
 class OrderService:
     """Service for handling order-related operations."""
@@ -234,19 +172,14 @@ class ContactService:
             logger.error(f"Error saving contact info: {e}")
             return False
 
-# ===== Cached Data =====
-
-@lru_cache(maxsize=1)
-def load_order_data_cached():
-    """Load order data with caching for better performance."""
-    return load_order_data()
-
 # ===== Initialize Services =====
+# ===== Service Layer =====
 
 # Initialize services (do this only once)
 llm_service = LLMService()
 order_service = OrderService()
 contact_service = ContactService()
+
 
 # ===== Node Functions =====
 
@@ -501,25 +434,46 @@ def router(state: ChatbotState):
 # ===== Chatbot Creation =====
 
 def create_chatbot():
-    """Initialize and return the e-commerce support chatbot graph."""
-    # Build the graph
+    """Initialize and return the e-commerce support chatbot with enhanced conversation handling."""
     workflow = StateGraph(ChatbotState)
-
-    # Add nodes
+    
+    def enhanced_continue_conversation(state: ChatbotState) -> ChatbotState:
+        """Enhanced conversation handling with better context management."""
+        messages = state["messages"]
+        last_message = messages[-1]["content"].lower()
+        new_state = state.copy()
+        
+        # Update conversation memory
+        conversation_memory.add_message("user", last_message)
+        
+        # Update key details if available
+        if state.get("current_order_id"):
+            conversation_memory.update_key_details("current_order_id", state["current_order_id"])
+        if state.get("customer_name"):
+            conversation_memory.update_key_details("customer_name", state["customer_name"])
+        
+        # Generate response using enhanced LLM service
+        response_text = llm_service.generate_response(messages, conversation_memory)
+        
+        # Update conversation memory with assistant's response
+        conversation_memory.add_message("assistant", response_text)
+        
+        # Update state
+        new_state["messages"].append({"role": "assistant", "content": response_text})
+        return new_state
+    
+    # Update the workflow with the enhanced conversation handler
+    workflow.add_node("continue_conversation", enhanced_continue_conversation)
     workflow.add_node("lookup_order", lookup_order)
-    workflow.add_node("connect_to_agent", connect_to_agent)
     workflow.add_node("collect_contact_info", collect_contact_info)
-    workflow.add_node("continue_conversation", continue_conversation)
-
-    # Add conditional edges with the router function
+    
+    # Add conditional edges
+    workflow.add_conditional_edges("continue_conversation", router)
     workflow.add_conditional_edges("lookup_order", router)
     workflow.add_conditional_edges("collect_contact_info", router)
-    workflow.add_conditional_edges("continue_conversation", router)
-    workflow.add_conditional_edges("connect_to_agent", router)
-
-    # Set the entry point
+    
     workflow.set_entry_point("continue_conversation")
-
+    
     return workflow.compile()
 
 # ===== FAQ Responses =====
@@ -627,7 +581,7 @@ def detect_intent(message: str) -> Optional[str]:
 
     # Shipping policy
     if any(phrase in message_lower for phrase in ["shipping policy", "delivery policy", "shipping time",
-                                                 "how long does shipping take", "shipping cost"]):  # Fixed phrase
+                                                 "how long shipping", "shipping cost"]):
         return "shipping_policy"
 
     # Payment methods
