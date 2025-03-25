@@ -38,7 +38,10 @@ class TestChatbot(unittest.TestCase):
     def test_chat_with_user_greeting(self):
         """Test the chatbot's greeting."""
         state = chat_with_user("Hello", self.initial_state)
-        self.assertIn("Hello! Welcome to our e-commerce support", state["messages"][-1]["content"])
+        self.assertIn(
+            FAQ_CONFIG["responses"]["greeting"].split(".")[0],  # Get first sentence
+            state["messages"][-1]["content"]
+        )
 
     def test_chat_with_user_faq(self):
     """Test the chatbot's response to FAQ questions."""
@@ -53,7 +56,7 @@ class TestChatbot(unittest.TestCase):
 
     state = chat_with_user("What payment methods do you accept?", self.initial_state)
     self.assertIn("credit cards", state["messages"][-1]["content"].lower())
-    @patch('src.chatbot.order_service.lookup_order_by_id')
+    @patch('src.chatbot.order_service.lookup_order_by_id')    
     def test_chat_with_user_order_lookup_success(self, mock_lookup):
         """Test successful order lookup."""
         mock_lookup.return_value = ("delivered", {
@@ -110,14 +113,13 @@ class TestChatbot(unittest.TestCase):
     @patch('src.chatbot.llm_service.generate_response')
     def test_chat_with_user_continue_conversation(self, mock_generate):
         """Test conversation continuation."""
-        mock_generate.return_value = "This should not be returned"  # The LLM is not called in this case
-
+        mock_generate.return_value = "This should not be returned"
+    
         state = chat_with_user("Hello, can you help me?", self.initial_state)
-
+    
         self.assertEqual(len(state["messages"]), 2)
         self.assertEqual(state["messages"][-1]["role"], "assistant")
-        self.assertIn(FAQ_RESPONSES["greeting"], state["messages"][-1]["content"])
-
+        self.assertIn(FAQ_CONFIG["responses"]["greeting"], state["messages"][-1]["content"])
     def test_chat_with_user_reset_state(self):
         """Test that the reset_state function returns a valid initial state."""
         initial_state = reset_state()
