@@ -57,7 +57,7 @@ from src.vector_db import (
     cached_get_orders_by_customer_id
 )
 # Add after your imports, before initializing services
-from utils.credentials import verify_credentials
+from src.credentials import verify_credentials
 
 conversation_memory = ConversationMemory(
     max_history=CONVERSATION_CONFIG["max_history_length"]
