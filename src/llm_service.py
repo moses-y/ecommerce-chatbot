@@ -8,21 +8,34 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from .state_management import ConversationMemory
 from .config import SYSTEM_PROMPT, GEMINI_CONFIG
+from utils.credentials import verify_credentials
 
 logger = logging.getLogger(__name__)
 
 class LLMService:
     def __init__(self):
-        self.llm = ChatGoogleGenerativeAI(
-            model=GEMINI_CONFIG["model"],
-            temperature=GEMINI_CONFIG["temperature"],
-            google_api_key=os.getenv("GOOGLE_API_KEY"),
-            convert_system_message_to_human=True,
-            timeout=15,
-            max_output_tokens=GEMINI_CONFIG["max_output_tokens"],
-            top_p=GEMINI_CONFIG["top_p"],
-            top_k=GEMINI_CONFIG["top_k"]
-        )
+        """Initialize the LLM service with proper credential verification."""
+        try:
+            # Verify credentials before initializing
+            cred_results = verify_credentials(["GOOGLE_API_KEY"])
+            if not all(cred_results.values()):
+                raise ValueError("Missing required Google API credentials")
+
+            self.llm = ChatGoogleGenerativeAI(
+                model=GEMINI_CONFIG["model"],
+                temperature=GEMINI_CONFIG["temperature"],
+                google_api_key=os.getenv("GOOGLE_API_KEY"),
+                convert_system_message_to_human=True,
+                timeout=15,
+                max_output_tokens=GEMINI_CONFIG["max_output_tokens"],
+                top_p=GEMINI_CONFIG["top_p"],
+                top_k=GEMINI_CONFIG["top_k"]
+            )
+            logger.info("LLM service initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM service: {e}")
+            raise RuntimeError(f"LLM service initialization failed: {str(e)}")
         
     def generate_response(self, 
                          messages: List[Dict[str, Any]], 
