@@ -55,15 +55,21 @@ jobs:
 
       - name: Set up Google Cloud Credentials
         run: |
-          echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > google_credentials.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=${{ github.workspace }}/google_credentials.json" >> $GITHUB_ENV
+          # Create credentials directory
+          mkdir -p ${{ github.workspace }}/credentials
+          # Save credentials JSON
+          echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > ${{ github.workspace }}/credentials/google_credentials.json
+          # Set permissions
+          chmod 600 ${{ github.workspace }}/credentials/google_credentials.json
+          # Export the path
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${{ github.workspace }}/credentials/google_credentials.json" >> $GITHUB_ENV
 
       - name: Create .env file
         run: |
           echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> .env
           echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
           echo "HUGGINGFACE_TOKEN=${{ secrets.HF_TOKEN }}" >> .env
-          echo "GOOGLE_APPLICATION_CREDENTIALS=${{ github.workspace }}/google_credentials.json" >> .env
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${{ github.workspace }}/credentials/google_credentials.json" >> .env
 
       - name: Run tests
         run: |
@@ -73,7 +79,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/google_credentials.json
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/credentials/google_credentials.json
           HUGGINGFACE_TOKEN: ${{ secrets.HF_TOKEN }}
 
   deploy:
