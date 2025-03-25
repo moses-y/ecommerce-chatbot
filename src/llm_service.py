@@ -8,7 +8,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from .state_management import ConversationMemory
 from .config import SYSTEM_PROMPT, GEMINI_CONFIG
-from utils.credentials import verify_credentials
+from src.credentials import verify_credentials
 
 logger = logging.getLogger(__name__)
 
