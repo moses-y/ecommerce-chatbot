@@ -1177,7 +1177,7 @@ if __name__ == "__main__":
         initialize_app()
         
         # Add health check endpoint
-        demo.add_api_route("/health", health_check, methods=["GET"])
+        # demo.add_api_route("/health", health_check, methods=["GET"])
         
         # Get server configuration
         server_config = get_server_config()
