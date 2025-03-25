@@ -31,6 +31,8 @@ except ImportError as e:
 
 from src.llm_service import LLMService
 from src.state_management import ConversationMemory
+from src.config import CONVERSATION_CONFIG, FAQ_CONFIG
+from src.state_utils import reset_state, update_state_from_result
 
 # Initialize services
 llm_service = LLMService()
@@ -535,24 +537,6 @@ button:focus, input:focus {
 
 # ===== Helper Functions =====
 
-def reset_state() -> Dict:
-    """Initialize or reset the chatbot's state."""
-    return {
-        "messages": [],
-        "order_lookup_attempted": False,
-        "current_order_id": None,
-        "needs_human_agent": False,
-        "contact_info_collected": False,
-        "customer_name": None,
-        "customer_email": None,
-        "customer_phone": None,
-        "contact_step": 0,
-        "chat_history": [],
-        "session_id": datetime.now().strftime("%Y%m%d%H%M%S"),
-        "feedback": None,
-        "type": "messages"  # Add this to track the chatbot type
-    }
-
 def process_message(
     message: str,
     history: List,
@@ -696,75 +680,22 @@ def track_order(order_id: str, state: Dict[str, Any]) -> Tuple[List[Tuple[str, s
 
 def get_faq_response(faq_key: str, state: Dict[str, Any]) -> Tuple[List, Dict[str, Any], str]:
     """Get a response for a FAQ."""
-    # Define FAQ responses
-    FAQ_RESPONSES = {
-        "return_policy": """Our return policy is as follows:
-
-1. Items can be returned within 30 days of delivery for a full refund.
-2. Products must be in original packaging and unused condition.
-3. For electronics, returns are accepted within 15 days and must include all accessories.
-4. Shipping costs for returns are covered by the customer unless the item was defective.
-5. Refunds are processed within 5-7 business days after we receive the returned item.
-
-Would you like more information about a specific aspect of our return policy?""",
-
-        "shipping_policy": """Our shipping policy:
-
-1. Standard shipping (5-7 business days): Free for orders over $35, otherwise $4.99
-2. Express shipping (2-3 business days): $9.99
-3. Next-day delivery (where available): $19.99
-4. International shipping available to select countries
-
-Delivery times may vary based on your location and product availability. You can track your shipment using the order ID provided in your confirmation email.
-
-Do you have any other questions about shipping?""",
-
-        "payment_methods": """We accept the following payment methods:
-
-1. Credit cards (Visa, Mastercard, American Express, Discover)
-2. Debit cards
-3. PayPal
-4. Store credit/gift cards
-5. Apple Pay and Google Pay (on mobile)
-
-All payment information is securely processed and encrypted. We do not store your full credit card details on our servers.
-
-Is there anything specific about our payment options you'd like to know?""",
-
-        "contact_info": """Our contact information:
-
-Customer Service Hours:
-- Monday to Friday: 8:00 AM - 8:00 PM EST
-- Saturday: 9:00 AM - 6:00 PM EST
-- Sunday: 10:00 AM - 5:00 PM EST
-
-Phone: +1-800-123-4567
-Email: support@ecommerce-example.com
-Live Chat: Available on our website during business hours
-
-For the fastest response, please have your order number ready when contacting us.
-
-Would you like me to connect you with a customer service representative?"""
-    }
-
-    if faq_key not in FAQ_RESPONSES:
+    if faq_key not in FAQ_CONFIG["responses"]:
         return state.get("chat_history", []), state, ""
 
     # Get the FAQ response
-    response = FAQ_RESPONSES[faq_key]
+    response = FAQ_CONFIG["responses"][faq_key]
     query = f"Tell me about your {faq_key.replace('_', ' ')}"
 
-    # Update history and state based on the chatbot type
+    # Update history and state
+    new_state = state.copy()
     if state.get("type") == "messages":
-        # For messages format
         history = state.get("chat_history", [])
         history.append({"role": "user", "content": query})
         history.append({"role": "assistant", "content": response})
     else:
-        # For tuples format
         history = state.get("chat_history", []) + [(query, response)]
 
-    new_state = state.copy()
     new_state["messages"] = [
         {"role": "user" if i % 2 == 0 else "assistant", "content": msg}
         for i, msg in enumerate([query, response])
@@ -772,7 +703,7 @@ Would you like me to connect you with a customer service representative?"""
     new_state["chat_history"] = history
 
     return history, new_state, ""
-
+    
 # ===== Gradio Interface =====
 
 with gr.Blocks(theme=theme, css=css) as demo:
