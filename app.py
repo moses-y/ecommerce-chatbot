@@ -1191,7 +1191,7 @@ if __name__ == "__main__":
             ssl_keyfile=server_config["ssl_keyfile"],
             ssl_certfile=server_config["ssl_certfile"],
             ssl_keyfile_password=server_config["ssl_keyfile_password"],
-            enable_queue=True,
+            #enable_queue=True,
             max_threads=40,
             show_error=True,
             cache_examples=True,
