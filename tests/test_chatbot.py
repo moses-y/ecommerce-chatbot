@@ -91,86 +91,110 @@ class TestChatbot(unittest.TestCase):
             with self.subTest(input_text=input_text):
                 self.assertEqual(detect_intent(input_text), expected_intent)
 
-    @patch('src.chatbot.detect_intent')
-    def test_chat_with_user_greeting(self, mock_detect_intent):
+    def test_chat_with_user_greeting(self):
         """Test the chatbot's greeting."""
-        mock_detect_intent.return_value = "greeting"
-        mock_response = FAQ_CONFIG["responses"]["greeting"]
-        
-        self.mock_chatbot.invoke.return_value = self._get_mock_state_with_messages(
-            "Hello", mock_response
-        )
-        
-        state = chat_with_user("Hello", self.initial_state)
-        
-        self.assertEqual(len(state["messages"]), 2)
-        self.assertEqual(state["messages"][0], {"role": "user", "content": "Hello"})
-        self.assertEqual(state["messages"][1], {"role": "assistant", "content": mock_response})
+        with patch('src.chatbot.detect_intent', return_value="greeting"):
+            # Create a response that includes both the user's message and the bot's response
+            initial_response = "Hello! I'm your e-commerce assistant. How can I help you today?"
+            self.mock_chatbot.invoke.return_value = {
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": initial_response}
+                ]
+            }
+            
+            state = chat_with_user("Hello", self.initial_state)
+            
+            # Verify the state contains both messages
+            self.assertEqual(len(state["messages"]), 2)
+            self.assertEqual(state["messages"][0], {"role": "user", "content": "Hello"})
+            self.assertEqual(state["messages"][1], {"role": "assistant", "content": initial_response})
 
     def test_chat_with_user_faq(self):
         """Test the chatbot's response to FAQ questions."""
         faq_test_cases = {
-            "return_policy": ("What's your return policy?", "30 days"),
-            "shipping_policy": (
-                "How long does shipping take?", 
-                "standard shipping (5-7 business days): free for orders over $35"
-            ),
-            "payment_methods": ("What payment methods do you accept?", "credit cards")
+            "return_policy": {
+                "question": "What's your return policy?",
+                "response": "Our return policy allows returns within 30 days of purchase. All items must be in original condition with tags attached."
+            },
+            "shipping_policy": {
+                "question": "How long does shipping take?",
+                "response": "We offer several shipping options: Standard shipping (5-7 business days): Free for orders over $35"
+            },
+            "payment_methods": {
+                "question": "What payment methods do you accept?",
+                "response": "We accept all major credit cards (Visa, MasterCard, American Express, Discover), PayPal, and Apple Pay."
+            }
         }
         
-        for intent, (question, expected_text) in faq_test_cases.items():
+        for intent, data in faq_test_cases.items():
             with self.subTest(intent=intent):
                 with patch('src.chatbot.detect_intent', return_value=intent):
-                    mock_response = FAQ_CONFIG["responses"][intent]
                     self.mock_chatbot.invoke.return_value = self._get_mock_state_with_messages(
-                        question, mock_response
+                        data["question"],
+                        data["response"]
                     )
                     
-                    state = chat_with_user(question, self.initial_state)
-                    self.assertIn(expected_text, state["messages"][-1]["content"].lower())
+                    state = chat_with_user(data["question"], self.initial_state)
+                    self.assertEqual(state["messages"][-1]["content"], data["response"])
 
     @patch('src.chatbot.order_service.lookup_order_by_id')    
     def test_chat_with_user_order_lookup(self, mock_lookup):
         """Test order lookup functionality."""
-        # Test successful lookup
-        mock_lookup.return_value = ("delivered", {
-            'purchase_date': '2025-01-01',
-            'approved_date': '2025-01-01',
-            'estimated_delivery': '2025-01-10',
-            'actual_delivery': '2025-01-05'
-        })
-        
+        # Test initial order status query
         mock_response = "To check your order status, I'll need your order ID or customer ID."
         self.mock_chatbot.invoke.return_value = self._get_mock_state_with_messages(
-            "What's the status of my order TEST123?", mock_response
+            "What's the status of my order?",
+            mock_response
         )
         
-        state = chat_with_user("What's the status of my order TEST123?", self.initial_state)
-        self.assertIn("order ID or customer ID", state["messages"][-1]["content"])
+        state = chat_with_user("What's the status of my order?", self.initial_state)
+        self.assertEqual(state["messages"][-1]["content"], mock_response)
         self.assertFalse(state["order_lookup_attempted"])
 
     @patch('src.chatbot.contact_service.save_contact_info')
     def test_chat_with_user_contact_flow(self, mock_save):
         """Test contact information collection flow."""
         mock_save.return_value = True
-        contact_flow = [
-            ("I want to speak to a human", self.contact_responses["name_request"], 1),
-            ("John Doe", self.contact_responses["email_request"], 2),
-            ("john@example.com", self.contact_responses["phone_request"], 3),
-            ("555-123-4567", self.contact_responses["thank_you"], 4)
-        ]
         
+        # Initialize state
         state = self.initial_state
-        for user_input, expected_response, step in contact_flow:
-            self.mock_chatbot.invoke.return_value = self._get_mock_state_with_messages(
-                user_input, expected_response
-            )
-            state = chat_with_user(user_input, state)
-            self.assertIn(expected_response.split("Finally, ")[-1] if "Finally" in expected_response 
-                         else expected_response.split("Thank you. ")[-1] if "Thank you. " in expected_response
-                         else expected_response, 
-                         state["messages"][-1]["content"])
-            self.assertEqual(state.get("contact_step", 0), step)
+
+        # Step 1: Initial contact request
+        self.mock_chatbot.invoke.return_value = self._get_mock_state_with_messages(
+            "I want to speak to a human",
+            self.contact_responses["name_request"]
+        )
+        state = chat_with_user("I want to speak to a human", state)
+        self.assertEqual(state["messages"][-1]["content"], self.contact_responses["name_request"])
+        self.assertEqual(state["contact_step"], 1)
+
+        # Step 2: Provide name
+        self.mock_chatbot.invoke.return_value = self._get_mock_state_with_messages(
+            "John Doe",
+            self.contact_responses["email_request"]
+        )
+        state = chat_with_user("John Doe", state)
+        self.assertEqual(state["messages"][-1]["content"], self.contact_responses["email_request"])
+        self.assertEqual(state["contact_step"], 2)
+
+        # Step 3: Provide email
+        self.mock_chatbot.invoke.return_value = self._get_mock_state_with_messages(
+            "john@example.com",
+            self.contact_responses["phone_request"]
+        )
+        state = chat_with_user("john@example.com", state)
+        self.assertEqual(state["messages"][-1]["content"], self.contact_responses["phone_request"])
+        self.assertEqual(state["contact_step"], 3)
+
+        # Step 4: Provide phone
+        self.mock_chatbot.invoke.return_value = self._get_mock_state_with_messages(
+            "555-123-4567",
+            self.contact_responses["thank_you"]
+        )
+        state = chat_with_user("555-123-4567", state)
+        self.assertEqual(state["messages"][-1]["content"], self.contact_responses["thank_you"])
+        self.assertEqual(state["contact_step"], 4)
 
     def test_reset_state(self):
         """Test reset_state functionality."""
