@@ -1168,7 +1168,7 @@ def initialize_app():
 
 if __name__ == "__main__":
     try:
-        # Try to configure logging, but continue if it fails
+        # Configure logging (continue with default config if it fails)
         if not configure_logging():
             print("Warning: Could not configure logging, continuing with default configuration")
         
@@ -1177,14 +1177,14 @@ if __name__ == "__main__":
         # Initialize application
         initialize_app()
         
-        # Add health check endpoint if needed
+        # Optionally add health check endpoint here if needed
         # demo.add_api_route("/health", health_check, methods=["GET"])
         
         # Get server configuration
         server_config = get_server_config()
         
         # Launch the app with production configuration.
-        # Removed unsupported keyword arguments such as cache_examples, max_queue_size, queue_callbacks, show_api, and analytics_enabled.
+        # Removed unsupported keyword arguments such as concurrency_count.
         demo.launch(
             server_name=server_config["server_name"],
             server_port=server_config["server_port"],
@@ -1196,7 +1196,6 @@ if __name__ == "__main__":
             max_threads=40,
             show_error=True,
             root_path="",
-            concurrency_count=4,
             startup_timeout=60,
             favicon_path="assets/favicon.ico",
             allowed_paths=["assets"],
