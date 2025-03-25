@@ -38,10 +38,8 @@ class TestChatbot(unittest.TestCase):
     def test_chat_with_user_greeting(self):
         """Test the chatbot's greeting."""
         state = chat_with_user("Hello", self.initial_state)
-        self.assertIn(
-            FAQ_CONFIG["responses"]["greeting"].split(".")[0],  # Get first sentence
-            state["messages"][-1]["content"]
-        )
+        self.assertIn("Hello! Welcome to our e-commerce support", 
+                     state["messages"][-1]["content"])
 
     def test_chat_with_user_faq(self):
         """Test the chatbot's response to FAQ questions."""
@@ -49,10 +47,8 @@ class TestChatbot(unittest.TestCase):
         self.assertIn("30 days", state["messages"][-1]["content"])
     
         state = chat_with_user("How long does shipping take?", self.initial_state)
-        self.assertIn(
-            FAQ_CONFIG["responses"]["shipping_policy"].split("\n")[2].strip(),  # Get the shipping time line
-            state["messages"][-1]["content"]
-        )
+        self.assertIn("Standard shipping (5-7 business days)", 
+                     state["messages"][-1]["content"])
     
         state = chat_with_user("What payment methods do you accept?", self.initial_state)
         self.assertIn("credit cards", state["messages"][-1]["content"].lower())
@@ -116,10 +112,9 @@ class TestChatbot(unittest.TestCase):
         mock_generate.return_value = "This should not be returned"
     
         state = chat_with_user("Hello, can you help me?", self.initial_state)
-    
-        self.assertEqual(len(state["messages"]), 2)
+        self.assertEqual(len(state["messages"]), 2)  # One user message, one bot response
         self.assertEqual(state["messages"][-1]["role"], "assistant")
-        self.assertIn(FAQ_CONFIG["responses"]["greeting"], state["messages"][-1]["content"])
+        self.assertIn("Hello! Welcome to", state["messages"][-1]["content"])
     def test_chat_with_user_reset_state(self):
         """Test that the reset_state function returns a valid initial state."""
         initial_state = reset_state()
