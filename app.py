@@ -29,6 +29,14 @@ except ImportError as e:
     print(f"Error importing required modules: {e}")
     raise
 
+from src.llm_service import LLMService
+from src.state_management import ConversationMemory
+
+# Initialize services
+llm_service = LLMService()
+conversation_memory = ConversationMemory(
+    max_history=CONVERSATION_CONFIG["max_history_length"]
+)
 # Initialize vector database with error handling - ONLY ONCE using singleton pattern
 print("Initializing vector database...")
 start_time = time.time()
