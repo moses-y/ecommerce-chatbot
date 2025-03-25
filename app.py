@@ -33,25 +33,50 @@ from src.llm_service import LLMService
 from src.state_management import ConversationMemory
 from src.config import CONVERSATION_CONFIG, FAQ_CONFIG
 from src.state_utils import reset_state, update_state_from_result
+from src.credentials import verify_credentials
+
+# ===== Initialize services with credential verification ====
+def initialize_services():
+    """Initialize all required services with proper credential verification."""
+    logger.info("Initializing services...")
+    start_time = time.time()
+    
+    try:
+        # Verify required credentials
+        cred_results = verify_credentials([
+            "GOOGLE_API_KEY",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "HUGGINGFACE_TOKEN"
+        ])
+        
+        if not all(cred_results.values()):
+            missing_creds = [k for k, v in cred_results.items() if not v]
+            raise EnvironmentError(f"Missing required credentials: {missing_creds}")
+
+        # Initialize LLM service
+        llm_service = LLMService()
+        
+        # Initialize conversation memory
+        conversation_memory = ConversationMemory(
+            max_history=CONVERSATION_CONFIG["max_history_length"]
+        )
+        
+        # Load order data and initialize vector database
+        orders_df = load_order_data(use_cache=True)
+        vector_collection = get_vector_db_instance(orders_df, use_subset=False)
+        
+        logger.info(f"Services initialized in {time.time() - start_time:.2f} seconds")
+        return llm_service, conversation_memory, vector_collection
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize services: {e}")
+        raise
 
 # Initialize services
-llm_service = LLMService()
-conversation_memory = ConversationMemory(
-    max_history=CONVERSATION_CONFIG["max_history_length"]
-)
-# Initialize vector database with error handling - ONLY ONCE using singleton pattern
-print("Initializing vector database...")
-start_time = time.time()
 try:
-    # Load order data
-    orders_df = load_order_data(use_cache=True)
-
-    # Initialize vector database using singleton pattern
-    vector_collection = get_vector_db_instance(orders_df, use_subset=False)
-
-    print(f"Vector database initialized in {time.time() - start_time:.2f} seconds")
+    llm_service, conversation_memory, vector_collection = initialize_services()
 except Exception as e:
-    print(f"Error initializing vector DB: {e}")
+    logger.error(f"Critical error during service initialization: {e}")
     raise
 
 # ===== UI Configuration =====
@@ -537,6 +562,8 @@ button:focus, input:focus {
 
 # ===== Helper Functions =====
 
+# ===== Helper Functions =====
+
 def process_message(
     message: str,
     history: List,
@@ -545,6 +572,14 @@ def process_message(
 ) -> Tuple[List, Dict[str, Any], str]:
     """Process user message and generate response."""
     try:
+        # Verify credentials before processing
+        cred_results = verify_credentials([
+            "GOOGLE_API_KEY",
+            "GOOGLE_APPLICATION_CREDENTIALS"
+        ])
+        if not all(cred_results.values()):
+            raise EnvironmentError("Missing required credentials")
+
         # Clear only if duplicate exists
         if state["messages"] and state["messages"][-1]["role"] == "user":
             state["messages"] = state["messages"][:-1]
@@ -569,7 +604,7 @@ def process_message(
                 elif isinstance(h, dict):
                     formatted_history.append(h)
 
-        # Update state
+        # Update state with formatted history
         state["messages"] = formatted_history
         if not state["messages"] or state["messages"][-1]["role"] != "user":
             state["messages"].append({"role": "user", "content": message})
@@ -577,8 +612,16 @@ def process_message(
         # Show typing indicator
         yield formatted_history, state, "typing-indicator active"
 
-        # Process through chatbot
+        # Process through chatbot with credential verification
         try:
+            # Verify credentials again before chat processing
+            cred_results = verify_credentials([
+                "GOOGLE_API_KEY",
+                "GOOGLE_APPLICATION_CREDENTIALS"
+            ])
+            if not all(cred_results.values()):
+                raise EnvironmentError("Credentials became invalid during processing")
+
             updated_state = chat_with_user(message, state)
             
             # Add any new messages from the updated state
@@ -595,6 +638,12 @@ def process_message(
                     if key in updated_state:
                         state[key] = updated_state[key]
 
+        except EnvironmentError as e:
+            logger.error(f"Credential error during chat processing: {e}")
+            state["messages"].append({
+                "role": "assistant",
+                "content": "I'm sorry, but I'm having trouble accessing my services right now. Please try again later."
+            })
         except Exception as e:
             logger.error(f"Error in chat processing: {e}")
             if not any(msg["role"] == "assistant" for msg in state["messages"]):
@@ -609,13 +658,21 @@ def process_message(
         # Hide typing indicator
         yield state["messages"], state, "typing-indicator"
 
+    except EnvironmentError as e:
+        logger.error(f"Credential error in process_message: {e}")
+        error_message = {
+            "role": "assistant",
+            "content": "I'm sorry, but I'm having trouble accessing my services right now. Please try again later."
+        }
+        state["messages"] = state.get("messages", []) + [error_message]
+        yield state["messages"], state, "typing-indicator"
     except Exception as e:
         logger.error(f"Error in process_message: {e}", exc_info=True)
-        if not any(msg["role"] == "assistant" for msg in state["messages"]):
-            state["messages"].append({
-                "role": "assistant",
-                "content": "I apologize, but I encountered an error processing your request."
-            })
+        error_message = {
+            "role": "assistant",
+            "content": "I apologize, but I encountered an error processing your request."
+        }
+        state["messages"] = state.get("messages", []) + [error_message]
         yield state["messages"], state, "typing-indicator"
 
 def clear_conversation(state: Dict[str, Any]) -> Tuple[List, Dict[str, Any]]:
@@ -944,10 +1001,190 @@ with gr.Blocks(theme=theme, css=css) as demo:
         outputs=[chatbot, state, typing_indicator]
     )
 
+# ===== Health Check and System Status =====
+
+def health_check():
+    """Verify system health and credential status."""
+    try:
+        # Verify credentials
+        cred_results = verify_credentials([
+            "GOOGLE_API_KEY",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "HUGGINGFACE_TOKEN"
+        ])
+        
+        if not all(cred_results.values()):
+            missing_creds = [k for k, v in cred_results.items() if not v]
+            logger.error(f"Health check failed: Missing credentials: {missing_creds}")
+            return {
+                "status": "unhealthy",
+                "message": f"Missing credentials: {missing_creds}",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+        # Verify services
+        test_message = "test"
+        test_state = reset_state()
+        test_state["messages"] = [{"role": "user", "content": test_message}]
+        
+        # Test LLM service
+        llm_service.generate_response(test_state["messages"], conversation_memory)
+        
+        # Test vector database
+        vector_collection.query("test")
+        
+        return {
+            "status": "healthy",
+            "message": "All systems operational",
+            "timestamp": datetime.utcnow().isoformat(),
+            "services": {
+                "llm": "operational",
+                "vector_db": "operational",
+                "credentials": "valid"
+            }
+        }
+    except Exception as e:
+        error_msg = f"Health check failed: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {
+            "status": "unhealthy",
+            "message": error_msg,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+# ===== Launch Configuration =====
+
+def configure_logging():
+    """Configure logging for production environment."""
+    try:
+        log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime('%Y%m%d')
+        log_file = os.path.join(log_dir, f"app_{timestamp}.log")
+        
+        # Configure root logger
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.StreamHandler(),  # Console output
+                logging.handlers.RotatingFileHandler(
+                    log_file,
+                    maxBytes=10485760,  # 10MB
+                    backupCount=5,
+                    encoding='utf-8'
+                ),
+                logging.handlers.TimedRotatingFileHandler(
+                    log_file,
+                    when='midnight',
+                    interval=1,
+                    backupCount=30,
+                    encoding='utf-8'
+                )
+            ]
+        )
+        
+        # Set specific levels for third-party loggers
+        logging.getLogger('gradio').setLevel(logging.WARNING)
+        logging.getLogger('urllib3').setLevel(logging.WARNING)
+        logging.getLogger('matplotlib').setLevel(logging.WARNING)
+        
+        logger.info(f"Logging configured. Log file: {log_file}")
+        return True
+    except Exception as e:
+        print(f"Failed to configure logging: {e}")
+        raise
+
+def get_server_config():
+    """Get server configuration from environment or use defaults."""
+    return {
+        "server_name": os.getenv("SERVER_HOST", "0.0.0.0"),
+        "server_port": int(os.getenv("SERVER_PORT", 7860)),
+        "share": os.getenv("ENABLE_SHARE", "false").lower() == "true",
+        "auth": None if os.getenv("AUTH_REQUIRED", "false").lower() == "false" else (
+            os.getenv("AUTH_USERNAME", "admin"),
+            os.getenv("AUTH_PASSWORD", "admin")
+        ),
+        "ssl_keyfile": os.getenv("SSL_KEYFILE", None),
+        "ssl_certfile": os.getenv("SSL_CERTFILE", None),
+        "ssl_keyfile_password": os.getenv("SSL_KEYFILE_PASSWORD", None)
+    }
+
+def initialize_app():
+    """Initialize the application and verify all dependencies."""
+    logger.info("Initializing application...")
+    
+    try:
+        # Verify credentials
+        cred_results = verify_credentials([
+            "GOOGLE_API_KEY",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "HUGGINGFACE_TOKEN"
+        ])
+        
+        if not all(cred_results.values()):
+            missing_creds = [k for k, v in cred_results.items() if not v]
+            raise EnvironmentError(f"Missing required credentials: {missing_creds}")
+            
+        # Verify services health
+        health_status = health_check()
+        if health_status["status"] != "healthy":
+            raise RuntimeError(f"Health check failed: {health_status['message']}")
+            
+        logger.info("Application initialized successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize application: {e}", exc_info=True)
+        raise
+
 # ===== Launch the app =====
+
 if __name__ == "__main__":
     try:
-        demo.launch(share=True)
+        # Configure logging first
+        configure_logging()
+        logger.info("Starting E-commerce Support Assistant...")
+        
+        # Initialize application
+        initialize_app()
+        
+        # Add health check endpoint
+        demo.add_api_route("/health", health_check, methods=["GET"])
+        
+        # Get server configuration
+        server_config = get_server_config()
+        
+        # Launch the app with production configuration
+        demo.launch(
+            server_name=server_config["server_name"],
+            server_port=server_config["server_port"],
+            share=server_config["share"],
+            auth=server_config["auth"],
+            ssl_keyfile=server_config["ssl_keyfile"],
+            ssl_certfile=server_config["ssl_certfile"],
+            ssl_keyfile_password=server_config["ssl_keyfile_password"],
+            enable_queue=True,
+            max_threads=40,
+            show_error=True,
+            cache_examples=True,
+            max_queue_size=100,
+            root_path="",
+            concurrency_count=4,
+            startup_timeout=60,
+            favicon_path="assets/favicon.ico",
+            allowed_paths=["assets"],
+            blocked_paths=["data", "logs", "config"],
+            queue_callbacks=True,
+            show_api=False,
+            analytics_enabled=False
+        )
+        
+        logger.info("Application launched successfully")
+        
     except Exception as e:
-        print(f"Error launching Gradio app: {e}")
-        raise
+        logger.critical(f"Failed to launch application: {e}", exc_info=True)
+        sys.exit(1)
+    finally:
+        logger.info("Shutting down application...")
