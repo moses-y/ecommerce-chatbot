@@ -40,10 +40,11 @@ from langgraph.graph import StateGraph, END
 load_dotenv()
 
 # Import local modules
-from src.config import ORDER_STATUS_DESCRIPTIONS,CONVERSATION_CONFIG
+from src.config import ORDER_STATUS_DESCRIPTIONS,CONVERSATION_CONFIG, FAQ_CONFIG
 from src.utils import load_order_data, get_order_status, format_order_details, create_order_index
 from src.state_management import ConversationMemory
 from src.llm_service import LLMService
+from src.state_utils import reset_state, update_state_from_result
 
 # Import vector database functions - these are imported here to avoid circular imports
 # The vector_db module should not import from chatbot
@@ -476,182 +477,36 @@ def create_chatbot():
     
     return workflow.compile()
 
-# ===== FAQ Responses =====
-
-FAQ_RESPONSES = {
-    "return_policy": """Our return policy is as follows:
-
-1. Items can be returned within 30 days of delivery for a full refund.
-2. Products must be in original packaging and unused condition.
-3. For electronics, returns are accepted within 15 days and must include all accessories.
-4. Shipping costs for returns are covered by the customer unless the item was defective.
-5. Refunds are processed within 5-7 business days after we receive the returned item.
-
-Would you like more information about a specific aspect of our return policy?""",
-
-    "shipping_policy": """Our shipping policy:
-
-1. Standard shipping (5-7 business days): Free for orders over $35, otherwise $4.99
-2. Express shipping (2-3 business days): $9.99
-3. Next-day delivery (where available): $19.99
-4. International shipping available to select countries
-
-Delivery times may vary based on your location and product availability. You can track your shipment using the order ID provided in your confirmation email.
-
-Do you have any other questions about shipping?""",
-
-    "payment_methods": """We accept the following payment methods:
-
-1. Credit cards (Visa, Mastercard, American Express, Discover)
-2. Debit cards
-3. PayPal
-4. Store credit/gift cards
-5. Apple Pay and Google Pay (on mobile)
-
-All payment information is securely processed and encrypted. We do not store your full credit card details on our servers.
-
-Is there anything specific about our payment options you'd like to know?""",
-
-    "warranty": """Our warranty policy:
-
-1. Most products come with a standard 1-year manufacturer's warranty.
-2. Electronics typically include a 90-day warranty against defects.
-3. Extended warranties are available for purchase on select items.
-4. Warranty claims require proof of purchase and the original packaging if possible.
-5. Warranties cover manufacturing defects but not damage from misuse or accidents.
-
-To make a warranty claim, please contact our customer service with your order details and a description of the issue.
-
-Do you need help with a specific warranty claim?""",
-
-    "order_cancellation": """Order cancellation information:
-
-1. Orders can be cancelled within 1 hour of placement with no penalty.
-2. Orders that haven't shipped can usually be cancelled through your account dashboard.
-3. For orders that have already shipped, you'll need to wait for delivery and then follow the return process.
-4. Cancellation requests are typically processed within 24 hours.
-5. Refunds for cancelled orders are issued to the original payment method within 3-5 business days.
-
-To cancel an order, please log into your account or provide your order ID.
-
-Would you like to cancel a specific order?""",
-
-    "gift_cards": """Gift card information:
-
-1. Gift cards are available in amounts from $10 to $500.
-2. Digital gift cards are delivered via email within 24 hours of purchase.
-3. Physical gift cards can be shipped to any address (standard shipping rates apply).
-4. Gift cards do not expire and have no maintenance fees.
-5. Lost or stolen gift cards cannot be replaced unless registered.
-
-To check your gift card balance, please visit our website and enter your gift card number and PIN.
-
-Can I help you purchase a gift card or check a balance?""",
-
-    "contact_info": """Our contact information:
-
-Customer Service Hours:
-- Monday to Friday: 8:00 AM - 8:00 PM EST
-- Saturday: 9:00 AM - 6:00 PM EST
-- Sunday: 10:00 AM - 5:00 PM EST
-
-Phone: +1-800-123-4567
-Email: support@ecommerce-example.com
-Live Chat: Available on our website during business hours
-
-For the fastest response, please have your order number ready when contacting us.
-
-Would you like me to connect you with a customer service representative?""",
-
-    "greeting": """Hello! Welcome to our e-commerce support. How can I help you today? You can ask about order status, return policies, shipping information, or connect with a human representative.""",
-
-    "goodbye": """You're welcome! Thank you for contacting our support. If you have any other questions in the future, don't hesitate to reach out. Have a great day!"""
-}
-
 # ===== Intent Detection =====
 
 def detect_intent(message: str) -> Optional[str]:
     """Detect the intent of a user message."""
     message_lower = message.lower()
-
-    # Return policy
-    if any(phrase in message_lower for phrase in ["return policy", "policy on return", "can i return",
-                                                 "how to return", "policy for returns", "returned items"]):
-        return "return_policy"
-
-    # Shipping policy
-    if any(phrase in message_lower for phrase in ["shipping policy", "delivery policy", "shipping time",
-                                                 "how long shipping", "shipping cost", "how long does shipping",
-                                                 "shipping take"]):  # Added more shipping phrases
-        return "shipping_policy"
-
-    # Payment methods
-    if any(phrase in message_lower for phrase in ["payment method", "payment option", "how to pay",
-                                                "accept payment", "credit card", "debit card", "paypal"]):
-        return "payment_methods"
-
-    # Warranty information
-    if any(phrase in message_lower for phrase in ["warranty", "guarantee", "product warranty",
-                                                "warranty policy", "warranty coverage"]):
-        return "warranty"
-
-    # Order cancellation
-    if any(phrase in message_lower for phrase in ["cancel order", "cancellation policy", "how to cancel",
-                                                "cancel my purchase", "stop my order"]):
-        return "order_cancellation"
-
-    # Gift cards
-    if any(phrase in message_lower for phrase in ["gift card", "gift certificate", "store credit",
-                                                "gift card balance", "redeem gift card"]):
-        return "gift_cards"
-
-    # Contact information
-    if any(phrase in message_lower for phrase in ["contact info", "contact information", "phone number",
-                                                "email address", "contact us", "customer service contact"]):
-        return "contact_info"
-
-    # Greeting
-    if any(greeting in message_lower for greeting in ["hello", "hi", "hey", "greetings", "good morning", "good afternoon", "good evening"]):
-        return "greeting"
-
-    # Goodbye
-    if any(phrase in message_lower for phrase in ["thank you", "thanks", "bye", "goodbye", "see you", "that's all"]):
-        return "goodbye"
-
-    # Human agent request
-    human_keywords = ["speak to a human", "talk to a human", "human representative",
-                     "real person", "speak to an agent", "talk to a representative",
-                     "connect me with a human", "human agent please", "agent", "representative"]
-
+    
+    # Check each intent's patterns first
+    for intent, patterns in FAQ_CONFIG["intent_patterns"].items():
+        if any(pattern in message_lower for pattern in patterns):
+            return intent
+    
+    # Check for human agent request
+    human_keywords = [
+        "speak to a human", "talk to a human", "human representative",
+        "real person", "speak to an agent", "talk to a representative",
+        "connect me with a human", "human agent please", "agent", "representative"
+    ]
     if any(keyword in message_lower for keyword in human_keywords):
         return "human_agent"
 
-    # Order status
-    if "order status" in message_lower or ("order" in message_lower and "status" in message_lower):
+    # Check for order status
+    if "order status" in message_lower or (
+        "order" in message_lower and "status" in message_lower
+    ):
         return "order_status"
 
-    # No specific intent detected
     return None
 
-# ===== Main Chat Function =====
 
-def reset_state() -> Dict:
-    """Initialize or reset the chatbot's state."""
-    return {
-        "messages": [],
-        "order_lookup_attempted": False,
-        "current_order_id": None,
-        "needs_human_agent": False,
-        "contact_info_collected": False,
-        "customer_name": None,
-        "customer_email": None,
-        "customer_phone": None,
-        "contact_step": 0,
-        "chat_history": [],
-        "session_id": datetime.now().strftime("%Y%m%d%H%M%S"),
-        "feedback": None,
-        "type": "messages"  # Ensure this is present
-    }
+# ===== Main Chat Function =====
 
 def chat_with_user(user_input: str, chat_state: Optional[Dict] = None) -> Dict:
     """Process a single user message and return updated state."""
