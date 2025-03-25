@@ -45,21 +45,24 @@ ORDER_STATUS_DESCRIPTIONS = {
 }
 
 # ===== API Configuration =====
-API_CONFIG = {
-    # OpenAI configuration
-    "openai": {
-        "model": "gpt-3.5-turbo",
-        "temperature": 0.2,
-        "max_tokens": 500,
-        "timeout_seconds": 15
-    },
-    # Gemini configuration
-    "gemini": {
-        "model": "gemini-1.5-flash",
-        "temperature": 0.2,
-        "max_tokens": 500,
-        "timeout_seconds": 15
-    }
+
+GEMINI_CONFIG = {
+    "model": "gemini-1.5-pro",  # or "gemini-1.5-flash" depending on your needs
+    "temperature": 0.2,
+    "max_output_tokens": 1024,
+    "top_p": 0.95,
+    "top_k": 40,
+    "context_window": 15  # Number of previous messages to consider
+}
+
+# ===== Conversation Configuration =====
+
+# Configuration for conversation handling
+CONVERSATION_CONFIG = {
+    "max_history_length": 10,
+    "context_window_size": 5,
+    "memory_persistence": True,
+    "summarize_threshold": 8  # Number of messages before creating a summary
 }
 
 # ===== Vector Database Configuration =====
