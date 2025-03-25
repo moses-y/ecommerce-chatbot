@@ -45,6 +45,7 @@ import gradio as gr
 from datetime import datetime
 from dotenv import load_dotenv
 from typing import Dict, List, Optional, Tuple, Any
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 
 # Add logging
 import logging
@@ -1107,13 +1108,13 @@ def configure_logging():
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             handlers=[
                 logging.StreamHandler(),  # Console output
-                logging.handlers.RotatingFileHandler(
+                RotatingFileHandler(  # Changed from logging.handlers.RotatingFileHandler
                     log_file,
                     maxBytes=10485760,  # 10MB
                     backupCount=5,
                     encoding='utf-8'
                 ),
-                logging.handlers.TimedRotatingFileHandler(
+                TimedRotatingFileHandler(  # Changed from logging.handlers.TimedRotatingFileHandler
                     log_file,
                     when='midnight',
                     interval=1,
