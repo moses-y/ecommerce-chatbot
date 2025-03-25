@@ -31,7 +31,89 @@ For order status inquiries, explain what each status means and provide relevant 
 
 IMPORTANT: When checking order status, ask for either order ID or customer ID. Both are 32-character alphanumeric codes.
 """
+======= FAQ ======
+FAQ_CONFIG = {
+    "responses": {
+        "return_policy": """Our return policy is as follows:
 
+1. Items can be returned within 30 days of delivery for a full refund.
+2. Products must be in original packaging and unused condition.
+3. For electronics, returns are accepted within 15 days and must include all accessories.
+4. Shipping costs for returns are covered by the customer unless the item was defective.
+5. Refunds are processed within 5-7 business days after we receive the returned item.
+
+Would you like more information about a specific aspect of our return policy?""",
+
+        "shipping_policy": """Our shipping policy:
+
+1. Standard shipping (5-7 business days): Free for orders over $35, otherwise $4.99
+2. Express shipping (2-3 business days): $9.99
+3. Next-day delivery (where available): $19.99
+4. International shipping available to select countries
+
+Delivery times may vary based on your location and product availability. You can track your shipment using the order ID provided in your confirmation email.
+
+Do you have any other questions about shipping?""",
+
+        "payment_methods": """We accept the following payment methods:
+
+1. Credit cards (Visa, Mastercard, American Express, Discover)
+2. Debit cards
+3. PayPal
+4. Store credit/gift cards
+5. Apple Pay and Google Pay (on mobile)
+
+All payment information is securely processed and encrypted. We do not store your full credit card details on our servers.
+
+Is there anything specific about our payment options you'd like to know?""",
+
+        "contact_info": """Our contact information:
+
+Customer Service Hours:
+- Monday to Friday: 8:00 AM - 8:00 PM EST
+- Saturday: 9:00 AM - 6:00 PM EST
+- Sunday: 10:00 AM - 5:00 PM EST
+
+Phone: +1-800-123-4567
+Email: support@ecommerce-example.com
+Live Chat: Available on our website during business hours
+
+For the fastest response, please have your order number ready when contacting us.
+
+Would you like me to connect you with a customer service representative?""",
+
+        "greeting": """Hello! Welcome to our e-commerce support. How can I help you today? You can ask about order status, return policies, shipping information, or connect with a human representative.""",
+
+        "goodbye": """You're welcome! Thank you for contacting our support. If you have any other questions in the future, don't hesitate to reach out. Have a great day!"""
+    },
+    
+    "intent_patterns": {
+        "return_policy": [
+            "return policy", "policy on return", "can i return",
+            "how to return", "policy for returns", "returned items"
+        ],
+        "shipping_policy": [
+            "shipping policy", "delivery policy", "shipping time",
+            "how long shipping", "shipping cost", "how long does shipping",
+            "shipping take"
+        ],
+        "payment_methods": [
+            "payment method", "payment option", "how to pay",
+            "accept payment", "credit card", "debit card", "paypal"
+        ],
+        "contact_info": [
+            "contact info", "contact information", "phone number",
+            "email address", "contact us", "customer service contact"
+        ],
+        "greeting": [
+            "hello", "hi", "hey", "greetings", "good morning", 
+            "good afternoon", "good evening"
+        ],
+        "goodbye": [
+            "thank you", "thanks", "bye", "goodbye", "see you", "that's all"
+        ]
+    }
+}
 # ===== Order Status Descriptions =====
 ORDER_STATUS_DESCRIPTIONS = {
     "created": "Your order has been created but not yet processed. Payment is being verified.",
