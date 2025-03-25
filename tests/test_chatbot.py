@@ -17,6 +17,7 @@ from src.chatbot import (
 )
 
 from src.config import FAQ_CONFIG
+from tests.test_helpers import setup_test_credentials, teardown_test_credentials
 
 class TestChatbot(unittest.TestCase):
     def setUp(self):
@@ -52,6 +53,16 @@ class TestChatbot(unittest.TestCase):
             "thank_you": "Thank you for providing your information. A customer service representative will contact you soon"
         }
 
+    @classmethod
+    def setUpClass(cls):
+        """Set up test environment before all tests."""
+        setup_test_credentials()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up test environment after all tests."""
+        teardown_test_credentials()
+        
     def tearDown(self):
         """Clean up after each test."""
         self.chatbot_patcher.stop()
