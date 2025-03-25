@@ -1,6 +1,43 @@
 # app.py: Modern Gradio interface for the E-commerce Support Chatbot
 import os
 import sys
+from datetime import datetime
+
+print("===== Application Startup at", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), "=====")
+
+
+# ==== Initialize_Credentials ====
+
+# Initialize credentials before any other imports
+def initialize_credentials():
+    """Initialize Google credentials from environment variables"""
+    try:
+        # Get the credentials JSON from environment
+        credentials_json = os.getenv('GOOGLE_CREDENTIALS')
+        if credentials_json:
+            # Ensure the directory exists
+            os.makedirs('/home/user/app', exist_ok=True)
+            
+            # Write the credentials file
+            credentials_path = '/home/user/app/google_credentials.json'
+            with open(credentials_path, 'w') as f:
+                f.write(credentials_json)
+            
+            # Set the environment variable to point to the file
+            os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
+            print("Successfully created credentials file at:", credentials_path)
+            return True
+    except Exception as e:
+        print(f"Error creating credentials file: {e}")
+        return False
+
+# Initialize credentials first
+if not initialize_credentials():
+    print("Failed to initialize credentials")
+    sys.exit(1)
+
+import os
+import sys
 import time
 import json
 import bleach
@@ -35,31 +72,6 @@ from src.config import CONVERSATION_CONFIG, FAQ_CONFIG
 from src.state_utils import reset_state, update_state_from_result
 from src.credentials import verify_credentials
 
-# ==== Initialize_Credentials ====
-def initialize_credentials():
-    """Initialize Google credentials from environment variables"""
-    try:
-        # Get the credentials JSON from environment
-        credentials_json = os.getenv('GOOGLE_CREDENTIALS')
-        if credentials_json:
-            # Ensure the directory exists
-            os.makedirs('/home/user/app', exist_ok=True)
-            
-            # Write the credentials file
-            credentials_path = '/home/user/app/google_credentials.json'
-            with open(credentials_path, 'w') as f:
-                f.write(credentials_json)
-            
-            # Set the environment variable to point to the file
-            os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
-            print("Successfully created credentials file")
-    except Exception as e:
-        print(f"Error creating credentials file: {e}")
-        raise
-
-# Add this right after the initialize_credentials() function
-print("===== Application Startup at", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), "=====")
-initialize_credentials()
 
 # ===== Initialize services with credential verification ====
 def initialize_services():
