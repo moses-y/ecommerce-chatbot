@@ -44,18 +44,18 @@ class TestChatbot(unittest.TestCase):
         )
 
     def test_chat_with_user_faq(self):
-    """Test the chatbot's response to FAQ questions."""
-    state = chat_with_user("What's your return policy?", self.initial_state)
-    self.assertIn("30 days", state["messages"][-1]["content"])
-
-    state = chat_with_user("How long does shipping take?", self.initial_state)
-    self.assertIn(
-        FAQ_CONFIG["responses"]["shipping_policy"].split("\n")[2].strip(),  # Get the shipping time line
-        state["messages"][-1]["content"]
-    )
-
-    state = chat_with_user("What payment methods do you accept?", self.initial_state)
-    self.assertIn("credit cards", state["messages"][-1]["content"].lower())
+        """Test the chatbot's response to FAQ questions."""
+        state = chat_with_user("What's your return policy?", self.initial_state)
+        self.assertIn("30 days", state["messages"][-1]["content"])
+    
+        state = chat_with_user("How long does shipping take?", self.initial_state)
+        self.assertIn(
+            FAQ_CONFIG["responses"]["shipping_policy"].split("\n")[2].strip(),  # Get the shipping time line
+            state["messages"][-1]["content"]
+        )
+    
+        state = chat_with_user("What payment methods do you accept?", self.initial_state)
+        self.assertIn("credit cards", state["messages"][-1]["content"].lower())
     @patch('src.chatbot.order_service.lookup_order_by_id')    
     def test_chat_with_user_order_lookup_success(self, mock_lookup):
         """Test successful order lookup."""
