@@ -32,9 +32,22 @@ jobs:
           # Install numpy first to avoid compatibility issues
           uv pip install numpy==1.26.4
           # Install core dependencies with specific versions
-          uv pip install python-dotenv==1.0.1 langchain==0.3.21 langchain-core==0.3.47 langgraph==0.3.18 langchain-openai==0.3.9 langchain-google-genai==2.0.10 google-ai-generativelanguage==0.6.10 pytest==7.4.0 gradio==5.22.0 huggingface-hub==0.29.3 google-generativeai==0.8.3
+          uv pip install python-dotenv==1.0.1 \
+                        langchain==0.3.21 \
+                        langchain-core==0.3.47 \
+                        langgraph==0.3.18 \
+                        langchain-openai==0.3.9 \
+                        langchain-google-genai==2.0.10 \
+                        google-ai-generativelanguage==0.6.10 \
+                        pytest==7.4.0 \
+                        gradio==5.22.0 \
+                        huggingface-hub==0.29.3 \
+                        google-generativeai==0.8.3
           # Install ChromaDB and its dependencies
-          uv pip install chromadb==0.6.3 pydantic==2.10.6 hnswlib==0.8.0 sentence-transformers==3.4.1
+          uv pip install chromadb==0.6.3 \
+                        pydantic==2.10.6 \
+                        hnswlib==0.8.0 \
+                        sentence-transformers==3.4.1
           # Install pandas last
           uv pip install pandas==2.2.3
           # Install any remaining dependencies
@@ -43,14 +56,14 @@ jobs:
       - name: Set up Google Cloud Credentials
         run: |
           echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > google_credentials.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/google_credentials.json" >> $GITHUB_ENV
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${{ github.workspace }}/google_credentials.json" >> $GITHUB_ENV
 
       - name: Create .env file
         run: |
           echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> .env
           echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
           echo "HUGGINGFACE_TOKEN=${{ secrets.HF_TOKEN }}" >> .env
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/google_credentials.json" >> .env
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${{ github.workspace }}/google_credentials.json" >> .env
 
       - name: Run tests
         run: |
@@ -60,7 +73,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          GOOGLE_APPLICATION_CREDENTIALS: $(pwd)/google_credentials.json
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/google_credentials.json
           HUGGINGFACE_TOKEN: ${{ secrets.HF_TOKEN }}
 
   deploy:
