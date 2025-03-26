@@ -1165,7 +1165,6 @@ def initialize_app():
         raise
 
 # ===== Launch the app =====
-
 if __name__ == "__main__":
     try:
         # Configure logging (continue with default config if it fails)
@@ -1184,7 +1183,7 @@ if __name__ == "__main__":
         server_config = get_server_config()
         
         # Launch the app with production configuration.
-        # Removed unsupported keyword arguments such as concurrency_count.
+        # Removed unsupported 'startup_timeout' from the argument list.
         demo.launch(
             server_name=server_config["server_name"],
             server_port=server_config["server_port"],
@@ -1196,7 +1195,6 @@ if __name__ == "__main__":
             max_threads=40,
             show_error=True,
             root_path="",
-            startup_timeout=60,
             favicon_path="assets/favicon.ico",
             allowed_paths=["assets"],
             blocked_paths=["data", "logs", "config"]
