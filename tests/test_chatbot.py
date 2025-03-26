@@ -325,77 +325,101 @@ class TestChatbot(unittest.TestCase):
         self.assertEqual(result_state["customer_email"], "test@example.com")
 
     def test_contact_flow_provide_phone_via_graph_and_save(self):
-        """Test providing phone completes flow, invokes graph, saves, and confirms."""
-        user_input = "123-456-7890"
-        state_before = {
-            **self.initial_state,
-            "messages": [
-                # ... previous messages ...
-                {"role": "user", "content": "test@example.com"},
-                {"role": "assistant", "content": CONTACT_PROMPT_PHONE_MSG}
-            ],
-            "needs_human_agent": True,
-            "contact_step": 3,
-            "customer_name": "Test User",
-            "customer_email": "test@example.com"
-        }
-        state_with_input = {
-            **state_before,
-            "messages": state_before["messages"] + [{"role": "user", "content": user_input}]
-        }
-        # Mock graph return state *after* saving and confirmation
-        mock_return_state = {
-            **state_with_input,
-            "messages": state_with_input["messages"] + [{"role": "assistant", "content": f"{CONTACT_SAVED_MSG_PART} A customer service representative will contact you soon..."}],
-            "needs_human_agent": True, # Or False depending on desired flow after collection
-            "contact_info_collected": True,
-            "contact_step": 4,
-            "customer_name": "Test User",
-            "customer_email": "test@example.com",
-            "customer_phone": "123-456-7890"
-        }
-        self.mock_compiled_graph.invoke.return_value = mock_return_state
-
-        # Act
-        result_state = chat_with_user(user_input, state_before)
-
-        # Assert Graph Invoke
-        self.mock_compiled_graph.invoke.assert_called_once()
-
-        # Assert Save Called (inside the graph node, so we check the mock directly)
-        # Note: This assumes save happens *within* the mocked invoke step.
-        # If save happens *before* invoke in reality (unlikely now), this needs adjustment.
-        self.mock_save_contact_info.assert_called_once_with("Test User", "test@example.com", "123-456-7890")
-
-        # Assert Final State
-        self.assertIn(CONTACT_SAVED_MSG_PART, result_state["messages"][-1]["content"])
-        self.assertTrue(result_state["contact_info_collected"])
-        self.assertEqual(result_state["contact_step"], 4)
-        self.assertEqual(result_state["customer_phone"], "123-456-7890")
+      """Test providing phone completes flow, invokes graph, and confirms (state check).""" # Modified docstring
+      user_input = "123-456-7890"
+      state_before = {
+          **self.initial_state,
+          "messages": [
+              # Simplified previous messages for clarity
+              {"role": "user", "content": "I need agent"},
+              {"role": "assistant", "content": CONTACT_PROMPT_NAME_MSG},
+              {"role": "user", "content": "Test User"},
+              {"role": "assistant", "content": f"Thank you, Test User. {CONTACT_PROMPT_EMAIL_MSG}"},
+              {"role": "user", "content": "test@example.com"},
+              {"role": "assistant", "content": CONTACT_PROMPT_PHONE_MSG}
+          ],
+          "needs_human_agent": True,
+          "contact_step": 3,
+          "customer_name": "Test User",
+          "customer_email": "test@example.com"
+      }
+      state_with_input = {
+          **state_before,
+          "messages": state_before["messages"] + [{"role": "user", "content": user_input}]
+      }
+      # Mock graph return state *after* saving and confirmation
+      mock_return_state = {
+          **state_with_input,
+          "messages": state_with_input["messages"] + [{"role": "assistant", "content": f"{CONTACT_SAVED_MSG_PART} A customer service representative will contact you soon..."}],
+          "needs_human_agent": False, # Set to False after collection completes
+          "contact_info_collected": True,
+          "contact_step": 4, # Final step
+          "customer_name": "Test User",
+          "customer_email": "test@example.com",
+          "customer_phone": "123-456-7890"
+      }
+      self.mock_compiled_graph.invoke.return_value = mock_return_state
+  
+      # Act
+      result_state = chat_with_user(user_input, state_before)
+  
+      # Assert Graph Invoke
+      self.mock_compiled_graph.invoke.assert_called_once()
+      call_args, _ = self.mock_compiled_graph.invoke.call_args
+      state_passed_to_graph = call_args[0]
+      self.assertEqual(state_passed_to_graph["messages"][-1]["content"], user_input) # Check input was passed
+  
+      # Assert Save Called - REMOVED because invoke is mocked
+      # self.mock_save_contact_info.assert_called_once_with("Test User", "test@example.com", "123-456-7890")
+  
+      # Assert Final State (based on mocked return)
+      self.assertEqual(len(result_state["messages"]), 8) # 6 initial + 1 user + 1 final assistant
+      self.assertIn(CONTACT_SAVED_MSG_PART, result_state["messages"][-1]["content"])
+      self.assertTrue(result_state["contact_info_collected"])
+      self.assertFalse(result_state["needs_human_agent"]) # Check it's reset
+      self.assertEqual(result_state["contact_step"], 4)
+      self.assertEqual(result_state["customer_phone"], "123-456-7890")
 
     def test_contact_flow_cancel_direct(self):
-        """Test cancelling contact flow is handled directly."""
-        user_input = "cancel"
-        state_before = {
-            **self.initial_state,
-            "messages": [
-                {"role": "user", "content": "I need agent"},
-                {"role": "assistant", "content": CONTACT_PROMPT_NAME_MSG}
-            ],
-            "needs_human_agent": True,
-            "contact_step": 1
-        }
-
-        # Act: Cancellation is handled *before* graph invoke
-        result_state = chat_with_user(user_input, state_before)
-
-        # Assert
-        self.mock_compiled_graph.invoke.assert_not_called() # Should not invoke graph
-        self.assertEqual(len(result_state["messages"]), 3) # agent, name_prompt, cancel_confirm
-        self.assertEqual(result_state["messages"][-1]["content"], CONTACT_CANCEL_MSG)
-        self.assertFalse(result_state["needs_human_agent"])
-        self.assertFalse(result_state["contact_info_collected"])
-        self.assertEqual(result_state["contact_step"], 0)
+      """Test cancelling contact flow is handled directly."""
+      user_input = "cancel"
+      state_before = {
+          **self.initial_state,
+          "messages": [
+              {"role": "user", "content": "I need agent"},
+              {"role": "assistant", "content": CONTACT_PROMPT_NAME_MSG}
+          ],
+          "needs_human_agent": True,
+          "contact_step": 1
+      }
+  
+      # Act: Cancellation is handled *before* graph invoke in chat_with_user
+      result_state = chat_with_user(user_input, state_before)
+  
+      # Assert
+      self.mock_compiled_graph.invoke.assert_not_called() # Should not invoke graph
+  
+      # --- CORRECTED Assertion ---
+      # Expected messages:
+      # 1. user: I need agent
+      # 2. assistant: ...provide name?
+      # 3. user: cancel  (added by chat_with_user)
+      # 4. assistant: Okay, I've canceled... (added by cancellation logic in chat_with_user)
+      self.assertEqual(len(result_state["messages"]), 4)
+      # --- END CORRECTED Assertion ---
+  
+      # Check the content of the last message
+      expected_cancel_msg = "Okay, I've canceled the request to speak with a human representative. How else can I help you today?"
+      self.assertEqual(result_state["messages"][-1]["role"], "assistant")
+      self.assertEqual(result_state["messages"][-1]["content"], expected_cancel_msg)
+  
+      # Check state reset
+      self.assertFalse(result_state["needs_human_agent"])
+      self.assertFalse(result_state["contact_info_collected"])
+      self.assertEqual(result_state["contact_step"], 0)
+      self.assertIsNone(result_state["customer_name"]) # Check partial info cleared
+      self.assertIsNone(result_state["customer_email"])
+      self.assertIsNone(result_state["customer_phone"])
 
     def test_graph_invoke_error(self):
         """Test fallback response when graph invoke raises an error."""
