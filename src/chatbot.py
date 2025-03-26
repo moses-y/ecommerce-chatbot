@@ -149,7 +149,6 @@ except Exception as e:
     raise
 
 def lookup_order(state: ChatbotState) -> ChatbotState:
-    """Handles order lookup based on provided order/customer ID."""
     new_state = state.copy()
     message = state["messages"][-1]["content"]
     match = re.search(r'\b([a-f0-9]{32})\b', message)
@@ -163,33 +162,10 @@ def lookup_order(state: ChatbotState) -> ChatbotState:
             if orders:
                 if len(orders) == 1:
                     order_data = orders[0]
-                    order_id = order_data["order_id"]
-                    status = order_data["order_status"]
-                    details = {
-                        "purchase_date": order_data["order_purchase_timestamp"],
-                        "delivery_date": order_data["order_delivered_customer_date"],
-                        "approved_date": order_data["order_approved_at"],
-                        "estimated_delivery": order_data["order_estimated_delivery_date"],
-                        "actual_delivery": order_data["order_delivered_customer_date"]
-                    }
-                    response = f"I found an order for your customer ID. {format_order_details(order_id, status, details)}"
+                    response = f"I found an order for your customer ID. {format_order_details(order_data['order_id'], order_data['order_status'], {...})}"
                 else:
-                    sorted_orders = sorted(
-                        orders,
-                        key=lambda x: pd.to_datetime(x["order_purchase_timestamp"]),
-                        reverse=True
-                    )
-                    recent_order = sorted_orders[0]
-                    order_id = recent_order["order_id"]
-                    status = recent_order["order_status"]
-                    details = {
-                        "purchase_date": recent_order["order_purchase_timestamp"],
-                        "delivery_date": recent_order["order_delivered_customer_date"],
-                        "approved_date": recent_order["order_approved_at"],
-                        "estimated_delivery": recent_order["order_estimated_delivery_date"],
-                        "actual_delivery": recent_order["order_delivered_customer_date"]
-                    }
-                    response = f"I found {len(orders)} orders for your customer ID. Here's the status of your most recent order: {format_order_details(order_id, status, details)}"
+                    recent_order = sorted(orders, key=lambda x: pd.to_datetime(x["order_purchase_timestamp"]), reverse=True)[0]
+                    response = f"I found {len(orders)} orders. Here's the most recent: {format_order_details(recent_order['order_id'], recent_order['order_status'], {...})}"
             else:
                 response = f"I couldn't find any orders with ID {extracted_id}. Please check and try again."
         new_state["messages"].append({"role": "assistant", "content": response})
@@ -200,6 +176,7 @@ def lookup_order(state: ChatbotState) -> ChatbotState:
                     "Could you please provide your order ID or customer ID? "
                     "It should be a 32-character alphanumeric code.")
         new_state["messages"].append({"role": "assistant", "content": response})
+        new_state["order_lookup_attempted"] = True  # Added here
     return new_state
 
 def collect_contact_info(state: ChatbotState) -> ChatbotState:
