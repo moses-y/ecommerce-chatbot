@@ -81,23 +81,23 @@ class TestChatbot(unittest.TestCase):
 
 # --- Test detect_intent (Should still work) ---
 
-def test_detect_intent():
-    """Test intent detection logic."""
-    cases = {
-        "What's your return policy?": "return_policy",
-        "How long does shipping take?": "shipping_policy",
-        "What payment methods do you accept?": "payment_methods",
-        "I want to speak to a human": "human_agent",
-        "What's the status of my order?": "order_status",
-        "track my package": "order_status",
-        "Hello there": "greeting",
-        "thanks bye": "goodbye",
-        "1234567890abcdef1234567890abcdef": None,
-        "order 1234567890abcdef1234567890abcdef status": "order_status",
-        "order status 1234567890abcdef1234567890abcdef": "order_status",
-    }
-    for text, expected in cases.items():
-        assert detect_intent(text) == expected
+    def test_detect_intent(self):
+      """Test intent detection logic."""
+      cases = {
+          "What's your return policy?": "return_policy",
+          "How long does shipping take?": "shipping_policy",
+          "What payment methods do you accept?": "payment_methods",
+          "I want to speak to a human": "human_agent",
+          "What's the status of my order?": "order_status",
+          "track my package": "order_status",
+          "Hello there": "greeting",
+          "thanks bye": "goodbye",
+          "1234567890abcdef1234567890abcdef": None,
+          "order 1234567890abcdef1234567890abcdef status": "order_status",
+          "order status 1234567890abcdef1234567890abcdef": "order_status",
+      }
+      for text, expected in cases.items():
+          assert detect_intent(text) == expected
 
     # --- Test Simple FAQ Handling (No Graph Invoke) ---
     def test_faq_response_direct(self):
