@@ -1,11 +1,10 @@
 # src/utils.py
-# src/utils.py
 
 import os
 import sys
 import pandas as pd
 import json
-from typing import Tuple, Dict, Any, Optional, List
+from typing import Dict, List, Any, Optional, TypedDict, Tuple
 from datetime import datetime
 from functools import lru_cache
 import logging # Added logging
