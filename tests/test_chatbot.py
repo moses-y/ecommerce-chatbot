@@ -422,22 +422,30 @@ class TestChatbot(unittest.TestCase):
       self.assertIsNone(result_state["customer_phone"])
 
     def test_graph_invoke_error(self):
-        """Test fallback response when graph invoke raises an error."""
-        user_input = "Something complex that goes to graph"
-        initial_state_with_input = {**self.initial_state, "messages": [{"role": "user", "content": user_input}]}
-
-        # Configure mock graph invoke to raise an exception
-        self.mock_compiled_graph.invoke.side_effect = Exception("Graph execution failed!")
-
-        # Act
-        result_state = chat_with_user(user_input, self.initial_state)
-
-        # Assert
-        self.mock_compiled_graph.invoke.assert_called_once()
-        self.assertEqual(len(result_state["messages"]), 2) # user + error message
-        self.assertEqual(result_state["messages"][-1]["role"], "assistant")
-        self.assertIn("having trouble handling that request", result_state["messages"][-1]["content"]) # Check for fallback message
-
+      """Test fallback response when graph invoke raises an error."""
+      # Use an input guaranteed not to match simple FAQs (adjust if needed based on your FAQ_CONFIG)
+      user_input = "Tell me about the general workflow for returns"
+      # Ensure this input does NOT trigger direct FAQ handling in chat_with_user
+  
+      # Configure mock graph invoke to raise an exception
+      self.mock_compiled_graph.invoke.side_effect = Exception("Graph execution failed!")
+  
+      # Act: Call chat_with_user with the initial state and the new input.
+      # chat_with_user will add the user_input to the messages list internally.
+      result_state = chat_with_user(user_input, self.initial_state)
+  
+      # Assert: Check that invoke was called (even though it raised an error)
+      self.mock_compiled_graph.invoke.assert_called_once()
+  
+      # Assert: Check that the fallback error message was added
+      self.assertEqual(len(result_state["messages"]), 2) # Initial state is empty, add user + fallback assistant
+      self.assertEqual(result_state["messages"][0]["role"], "user")
+      self.assertEqual(result_state["messages"][0]["content"], user_input)
+      self.assertEqual(result_state["messages"][1]["role"], "assistant")
+      expected_fallback = ("I seem to be having trouble handling that request right now. "
+                           "You could try asking differently, or ask about our return policy, "
+                           "shipping options, or request to speak with a human representative.")
+      self.assertEqual(result_state["messages"][1]["content"], expected_fallback)
 
     # --- Test reset_state (Should still work) ---
     def test_reset_state(self):
