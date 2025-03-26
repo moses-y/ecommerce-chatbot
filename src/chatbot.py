@@ -779,51 +779,54 @@ def get_compiled_graph():
 def detect_intent(message: str) -> Optional[str]:
     """Detects user intent based on keywords and patterns."""
     lower_msg = message.lower()
+    has_id = bool(re.search(r"\b([a-f0-9]{32})\b", lower_msg)) # Check for ID early
 
-    # Check FAQ intents first (using patterns from config)
-    if "intent_patterns" in FAQ_CONFIG:
-        for intent, patterns in FAQ_CONFIG["intent_patterns"].items():
-            # Ensure patterns is a list before iterating
-            if isinstance(patterns, list) and any(pattern in lower_msg for pattern in patterns):
-                logger.debug(f"Detected FAQ intent: {intent}")
-                return intent
+    # --- PRIORITY 1: Order Status ---
+    order_query_words = ["order status", "track my order", "where is my order", "delivery status", "check my order"]
+    # Specific check for "order <id> status" pattern
+    if "order" in lower_msg and "status" in lower_msg and has_id:
+         logger.debug("Detected intent: order_status (specific pattern)")
+         return "order_status"
+    # General check for order query words OR id + "order" keyword
+    if any(phrase in lower_msg for phrase in order_query_words) or (has_id and "order" in lower_msg):
+         logger.debug("Detected intent: order_status (general)")
+         return "order_status"
+    # --- END PRIORITY 1 ---
 
-    # Check for human agent request
+    # --- PRIORITY 2: Human Agent ---
     human_keywords = ["speak to a human", "talk to a human", "human representative",
                       "real person", "speak to an agent", "talk to a representative",
                       "connect me with a human", "human agent please", "agent", "representative", "live agent"]
     if any(word in lower_msg for word in human_keywords):
         logger.debug("Detected intent: human_agent")
         return "human_agent"
+    # --- END PRIORITY 2 ---
 
-    # --- MODIFIED Order Status Check ---
-    order_query_words = ["order status", "track my order", "where is my order", "delivery status", "check my order"]
-    has_id = bool(re.search(r"\b([a-f0-9]{32})\b", lower_msg))
+    # --- PRIORITY 3: General FAQs (from config) ---
+    # Ensure FAQ_CONFIG is loaded and structured correctly
+    if "intent_patterns" in FAQ_CONFIG:
+        for intent, patterns in FAQ_CONFIG["intent_patterns"].items():
+            # Ensure patterns is a list before iterating
+            if isinstance(patterns, list) and any(pattern in lower_msg for pattern in patterns):
+                # Avoid re-classifying intents already handled above
+                if intent not in ["order_status", "human_agent"]:
+                    logger.debug(f"Detected FAQ intent: {intent}")
+                    return intent
+    # --- END PRIORITY 3 ---
 
-    # Specific check for "order <id> status" pattern FIRST
-    if "order" in lower_msg and "status" in lower_msg and has_id:
-         logger.debug("Detected intent: order_status (specific pattern)")
-         return "order_status"
-
-    # General check for order query words OR id + "order" keyword
-    if any(phrase in lower_msg for phrase in order_query_words) or (has_id and "order" in lower_msg):
-         logger.debug("Detected intent: order_status (general)")
-         return "order_status"
-    # --- END MODIFIED Order Status Check ---
-
-    # Check for greetings
+    # --- PRIORITY 4: Greetings & Goodbye ---
     greeting_words = ["hello", "hi", "hey", "greetings"]
     if any(word in lower_msg for word in greeting_words):
          logger.debug("Detected intent: greeting")
          return "greeting"
 
-    # Check for goodbye
-    goodbye_words = ["bye", "goodbye", "see you", "later", "exit", "quit", "that's all", "no thanks"] # Added exit keywords here too
+    goodbye_words = ["bye", "goodbye", "see you", "later", "exit", "quit", "that's all", "no thanks"]
     if any(word in lower_msg for word in goodbye_words):
          logger.debug("Detected intent: goodbye")
          return "goodbye"
+    # --- END PRIORITY 4 ---
 
-    logger.debug("No specific intent detected.")
+    logger.debug("No specific intent detected, returning None.")
     return None # Return None if no specific intent matches
 
 # --- Main execution block ---
