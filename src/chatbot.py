@@ -778,12 +778,12 @@ def get_compiled_graph():
 
 def detect_intent(message: str) -> Optional[str]:
     """Detects user intent based on keywords and patterns using prioritized checks."""
-    print("DETECT_INTENT_VERSION_CHECK_V7") # Increment again
+    print("DETECT_INTENT_VERSION_CHECK_V9") # Increment again
     lower_msg = message.lower()
     logger.debug(f"detect_intent input: '{message}', lower: '{lower_msg}'") # Added for clarity
 
     # Use regex to find the ID, store the match object
-    id_match = re.search(r"\b([a-f0-9]{32})\b", lower_msg)
+    id_match = re.search(r"[a-f0-9]{32}", lower_msg) # Simplified ID regex
     has_id = bool(id_match)
     logger.debug(f"ID found: {has_id}")
 
@@ -791,14 +791,18 @@ def detect_intent(message: str) -> Optional[str]:
     order_query_words = ["check order status","order status", "track my order", "where is my order", "delivery status", "check my order", "order", "order ID"]
 
     # --- VERY SPECIFIC DEBUGGING ---
-    pattern_to_test = r"\border\b.*?\b[a-f0-9]{32}\b.*?\bstatus\b"
-    search_result = re.search(pattern_to_test, lower_msg)
-    print(f"DEBUG: Regex '{pattern_to_test}' on '{lower_msg}' -> Result: {search_result}")
+    pattern_to_test_1 = r"\border\b.*?[a-f0-9]{32}.*?\bstatus\b" # Simplified regex
+    pattern_to_test_2 = r"\border status\b.*?[a-f0-9]{32}" # New regex for "order status ID"
+    search_result_1 = re.search(pattern_to_test_1, lower_msg)
+    search_result_2 = re.search(pattern_to_test_2, lower_msg)
+    print(f"DEBUG: Regex '{pattern_to_test_1}' on '{lower_msg}' -> Result: {search_result_1}")
+    print(f"DEBUG: Regex '{pattern_to_test_2}' on '{lower_msg}' -> Result: {search_result_2}")
     # --- END SPECIFIC DEBUGGING ---
 
     # Specific check using regex for "order" and "status" as whole words, plus the ID.
-    if has_id and (search_result or # Use the stored result
-                   re.search(r"\bstatus\b.*?\b[a-f0-9]{32}\b.*?\border\b", lower_msg)):
+    if has_id and (search_result_1 or search_result_2 or # Use the stored result
+                   re.search(r"\bstatus\b.*?[a-f0-9]{32}.*?\border\b", lower_msg) or # Simplified regex
+                   re.search(r"\border status\b.*?[a-f0-9]{32}", lower_msg)): # New regex for "order status ID"
         logger.debug("Detected intent: order_status (specific regex pattern)")
         return "order_status"
 
@@ -863,7 +867,7 @@ def detect_intent(message: str) -> Optional[str]:
         return None # Explicitly handle the case of just an ID
 
     logger.debug("No specific intent detected, returning None.")
-    return None # Default return if nothing matches
+    return None
 
 if __name__ == "__main__":
     try:
