@@ -637,80 +637,99 @@ def chat_with_user(user_input: str, chat_state: Optional[Dict] = None) -> Dict:
         user_input_cleaned = user_input.strip()
         if not user_input_cleaned:
              logger.warning("Received empty user input.")
-             # Optionally return state with a message asking for input
+             # Return state with a message asking for input
              chat_state["messages"] = chat_state.get("messages", []) + [{"role": "assistant", "content": "Did you mean to say something?"}]
              return chat_state
 
-        # Ensure user message is added only once
+        # Ensure user message is added only once to the state's message list
         messages = chat_state.get("messages", [])
+        # Check if messages list is empty OR if the last message is different from the current input
         if not messages or messages[-1].get("content") != user_input_cleaned or messages[-1].get("role") != "user":
              messages.append({"role": "user", "content": user_input_cleaned})
-             chat_state["messages"] = messages # Update state
+             chat_state["messages"] = messages # Update state with the new user message
 
         # --- Intent detection for simple FAQs (handled outside graph) ---
         intent = detect_intent(user_input_cleaned)
-        # Handle simple FAQs directly (excluding order_status and human_agent which the graph handles)
-        # Ensure FAQ_RESPONSES and intent patterns are loaded correctly
-        if intent and intent in FAQ_RESPONSES and intent not in ["greeting", "goodbye", "human_agent", "order_status", "unknown", "affirmation", "negation"]: # Add more complex intents to exclude if needed
-            logger.info(f"Handling simple FAQ intent: {intent}")
+
+        # --- MODIFIED Direct FAQ Handling ---
+        # Handle simple FAQs directly, EXCLUDING intents managed by the graph nodes
+        graph_handled_intents = ["human_agent", "order_status", "unknown", "affirmation", "negation"] # Intents definitely needing graph logic
+        # Check if the detected intent is a simple FAQ response AND NOT explicitly handled by the graph
+        if intent and intent in FAQ_RESPONSES and intent not in graph_handled_intents:
+            logger.info(f"Handling simple FAQ/response intent directly: {intent}")
             chat_state["messages"].append({"role": "assistant", "content": FAQ_RESPONSES[intent]})
-            return chat_state # Return early for simple FAQs
+            # If the intent is 'goodbye', we might consider ending the session,
+            # but for now, just returning the state with the goodbye message is sufficient.
+            return chat_state # Return early for simple FAQs/responses
+        # --- END MODIFIED Direct FAQ Handling ---
+
 
         # --- Handle cancellation *during* contact info collection ---
-        # (Keep this specific check here as it modifies state before graph potentially runs)
+        # This logic runs before invoking the graph if a cancellation is detected mid-flow.
         if chat_state.get("needs_human_agent") and not chat_state.get("contact_info_collected"):
             cancel_terms = ["cancel", "nevermind", "never mind", "stop", "go back", "different question", "forget it"]
             id_terms = ["customer id", "my id", "delivery status", "order status", "track", "check order"]
             lower_input = user_input_cleaned.lower()
+            # Check if user input contains cancellation terms OR order-related terms (implying they changed their mind)
             if any(term in lower_input for term in cancel_terms) or (any(term in lower_input for term in id_terms) and chat_state.get("contact_step", 0) > 0):
                 logger.info("User cancelled human agent request during collection.")
+                # Reset relevant state variables
                 chat_state["needs_human_agent"] = False
                 chat_state["contact_info_collected"] = False
                 chat_state["contact_step"] = 0 # Reset contact state
-                chat_state["customer_name"] = None # Clear partial info
+                chat_state["customer_name"] = None # Clear potentially collected partial info
                 chat_state["customer_email"] = None
                 chat_state["customer_phone"] = None
 
+                # Determine the appropriate cancellation response
                 if any(term in lower_input for term in id_terms):
                      response_content = ("Okay, I've canceled the request for a human agent. "
                                          "To check your order status instead, please provide your order ID or customer ID (a 32-character alphanumeric code).")
-                     chat_state["order_lookup_attempted"] = True # Set flag as we prompted
+                     # Set flag indicating we prompted for an ID, relevant for the next router decision
+                     chat_state["order_lookup_attempted"] = True
                 else:
                     response_content = "Okay, I've canceled the request to speak with a human representative. How else can I help you today?"
 
+                # Add the cancellation response to the messages
                 chat_state["messages"].append({"role": "assistant", "content": response_content})
-                return chat_state # Return state after handling cancellation
+                return chat_state # Return state immediately after handling cancellation
 
         # --- Invoke the state graph for all other conversation flow ---
         try:
             logger.info("Invoking state graph...")
-            # Get the compiled graph (consider caching)
-            # chatbot_graph = create_chatbot() # Recompiling every time can be slow
-            # Better: Compile once at startup if possible, or use LRU cache
-            chatbot_graph = get_compiled_graph() # Assume a function that returns the compiled graph
+            # Get the compiled graph (using the cached version)
+            chatbot_graph = get_compiled_graph()
 
-            # Use a reasonable recursion limit
+            # Execute the graph with the current state
+            # Use a reasonable recursion limit to prevent infinite loops
             result_state = chatbot_graph.invoke(chat_state, config={"recursion_limit": 15})
 
             # --- Post-graph processing and validation ---
+            # Ensure the graph returned a valid dictionary state
             if isinstance(result_state, dict) and "messages" in result_state:
                  logger.debug(f"Graph returned state keys: {list(result_state.keys())}")
                  final_messages = result_state.get("messages", [])
                  # Simple deduplication: remove last message if identical to second-to-last
+                 # This can sometimes happen with certain graph flows.
                  if len(final_messages) >= 2 and final_messages[-1] == final_messages[-2]:
                       logger.warning("Graph produced duplicate last message, removing.")
                       final_messages.pop()
                       result_state["messages"] = final_messages # Update state
 
-                 # Ensure state consistency (optional but good practice)
+                 # Ensure core state keys exist (optional but good practice for robustness)
                  result_state.setdefault("order_lookup_attempted", False)
                  result_state.setdefault("needs_human_agent", False)
                  result_state.setdefault("contact_info_collected", False)
                  result_state.setdefault("contact_step", 0)
+                 # Ensure session_id persists
+                 result_state.setdefault("session_id", chat_state.get("session_id", reset_state()["session_id"]))
+
 
                  return result_state
             else:
-                 logger.error(f"Graph invocation returned unexpected result type: {type(result_state)}")
+                 # Log an error if the graph returned something unexpected
+                 logger.error(f"Graph invocation returned unexpected result type: {type(result_state)}. Result: {result_state}")
+                 # Append a generic error message for the user
                  chat_state["messages"].append({
                      "role": "assistant",
                      "content": "I encountered an internal issue processing that. Could you please try rephrasing?"
@@ -718,28 +737,31 @@ def chat_with_user(user_input: str, chat_state: Optional[Dict] = None) -> Dict:
                  return chat_state
 
         except Exception as graph_e:
-            # Handles graph execution errors (e.g., recursion limits, node errors)
+            # Handles graph execution errors (e.g., recursion limits, errors within nodes)
             logger.error(f"Chatbot graph processing error: {graph_e}", exc_info=True)
             fallback_message = ("I seem to be having trouble handling that request right now. "
                                 "You could try asking differently, or ask about our return policy, shipping options, or request to speak with a human representative.")
-            # Avoid adding duplicate error messages
+            # Avoid adding duplicate error messages if the error persists
             if not chat_state.get("messages") or chat_state["messages"][-1].get("content") != fallback_message:
                  chat_state["messages"] = chat_state.get("messages", []) + [{"role": "assistant", "content": fallback_message}]
             return chat_state
 
     # --- Top-level exception handling ---
     except EnvironmentError as ee:
+        # Handle missing credentials or other environment issues
         logger.error(f"Credential or Environment error in chat_with_user: {ee}", exc_info=True)
-        chat_state = chat_state or reset_state()
+        chat_state = chat_state or reset_state() # Ensure state exists
         chat_state["messages"] = chat_state.get("messages", []) + [{
             "role": "assistant",
             "content": "I'm having trouble accessing necessary services due to a configuration issue. Please try again later or contact support."
         }]
         return chat_state
     except Exception as ex:
+        # Catch any other unexpected errors during processing
         logger.error(f"Unexpected general error in chat_with_user: {ex}", exc_info=True)
-        chat_state = chat_state or reset_state()
+        chat_state = chat_state or reset_state() # Ensure state exists
         generic_error = "I apologize for the technical difficulty. Could you please try asking your question again?"
+        # Avoid adding duplicate generic error messages
         if not chat_state.get("messages") or chat_state["messages"][-1].get("content") != generic_error:
              chat_state["messages"] = chat_state.get("messages", []) + [{"role": "assistant", "content": generic_error}]
         return chat_state
@@ -753,15 +775,15 @@ def get_compiled_graph():
 
 
 # --- detect_intent ---
-# (Keep this function as is, assuming it works for your FAQ intents)
+
 def detect_intent(message: str) -> Optional[str]:
     """Detects user intent based on keywords and patterns."""
     lower_msg = message.lower()
 
-    # Check FAQ intents first
-    # Ensure FAQ_CONFIG is loaded and structured correctly
+    # Check FAQ intents first (using patterns from config)
     if "intent_patterns" in FAQ_CONFIG:
         for intent, patterns in FAQ_CONFIG["intent_patterns"].items():
+            # Ensure patterns is a list before iterating
             if isinstance(patterns, list) and any(pattern in lower_msg for pattern in patterns):
                 logger.debug(f"Detected FAQ intent: {intent}")
                 return intent
@@ -774,28 +796,35 @@ def detect_intent(message: str) -> Optional[str]:
         logger.debug("Detected intent: human_agent")
         return "human_agent"
 
-    # Check for order status query
+    # --- MODIFIED Order Status Check ---
     order_query_words = ["order status", "track my order", "where is my order", "delivery status", "check my order"]
-    # Check for ID presence as well, but intent is primarily about the query type
     has_id = bool(re.search(r"\b([a-f0-9]{32})\b", lower_msg))
-    if any(phrase in lower_msg for phrase in order_query_words) or (has_id and "order" in lower_msg):
-         logger.debug("Detected intent: order_status")
+
+    # Specific check for "order <id> status" pattern FIRST
+    if "order" in lower_msg and "status" in lower_msg and has_id:
+         logger.debug("Detected intent: order_status (specific pattern)")
          return "order_status"
 
-    # Add other intent detections if needed (greetings, goodbye, etc.)
+    # General check for order query words OR id + "order" keyword
+    if any(phrase in lower_msg for phrase in order_query_words) or (has_id and "order" in lower_msg):
+         logger.debug("Detected intent: order_status (general)")
+         return "order_status"
+    # --- END MODIFIED Order Status Check ---
+
+    # Check for greetings
     greeting_words = ["hello", "hi", "hey", "greetings"]
     if any(word in lower_msg for word in greeting_words):
          logger.debug("Detected intent: greeting")
-         return "greeting" # Assuming you have a 'greeting' response in FAQ_RESPONSES
+         return "greeting"
 
-    goodbye_words = ["bye", "goodbye", "see you", "later"]
+    # Check for goodbye
+    goodbye_words = ["bye", "goodbye", "see you", "later", "exit", "quit", "that's all", "no thanks"] # Added exit keywords here too
     if any(word in lower_msg for word in goodbye_words):
          logger.debug("Detected intent: goodbye")
-         return "goodbye" # Assuming you have a 'goodbye' response
+         return "goodbye"
 
     logger.debug("No specific intent detected.")
     return None # Return None if no specific intent matches
-
 
 # --- Main execution block ---
 # (Keep if __name__ == "__main__": block as is for local testing)
