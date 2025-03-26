@@ -90,10 +90,10 @@ except Exception as e:
 # ===== UI Configuration =====
 
 # Define a modern theme with light brown and light blue tones using glassmorphism effects.
-# NOTE: Instead of using hex codes in the theme's hue parameters, we use valid built-in color names.
+# NOTE: Instead of using hex codes for the hue parameters, we use valid built-in color names.
 theme = gr.themes.Soft(
-    primary_hue="teal",          # Using built-in color name instead of "#A1887F"
-    secondary_hue="indigo",      # Using built-in color name instead of "#81D4FA"
+    primary_hue="teal",          # Using built-in color name
+    secondary_hue="indigo",      # Using built-in color name
     neutral_hue="slate",
     font=["Inter", "SF Pro Display", "system-ui", "sans-serif"],
     radius_size=gr.themes.sizes.radius_sm,
@@ -227,7 +227,7 @@ css = """
 """
 
 # ===== Helper Functions =====
-def process_message(message: str, history: List, state: Dict[str, Any], order_id: str = None) -> Tuple[List, Dict[str, Any], str]:
+def process_message(message: str, history: List, state: Dict[str, Any], order_id: str = None) -> Tuple[List, Dict[str, Any]]:
     """Process user message and generate response."""
     try:
         cred_results = verify_credentials(["GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"])
@@ -252,7 +252,8 @@ def process_message(message: str, history: List, state: Dict[str, Any], order_id
         state["messages"] = formatted_history
         if not state["messages"] or state["messages"][-1]["role"] != "user":
             state["messages"].append({"role": "user", "content": message})
-        yield formatted_history, state, "typing-indicator active"
+        # Produce initial state output before processing
+        yield state["messages"], state
         try:
             cred_results = verify_credentials(["GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"])
             if not all(cred_results.values()):
@@ -275,17 +276,17 @@ def process_message(message: str, history: List, state: Dict[str, Any], order_id
             if not any(msg["role"] == "assistant" for msg in state["messages"]):
                 state["messages"].append({"role": "assistant", "content": "I encountered an error processing your request."})
         state["chat_history"] = state["messages"]
-        yield state["messages"], state, "typing-indicator"
+        yield state["messages"], state
     except EnvironmentError as e:
         logger.error(f"Credential error in process_message: {e}")
         error_message = {"role": "assistant", "content": "I'm sorry, but I'm having trouble accessing my services right now. Please try again later."}
         state["messages"] = state.get("messages", []) + [error_message]
-        yield state["messages"], state, "typing-indicator"
+        yield state["messages"], state
     except Exception as e:
         logger.error(f"Error in process_message: {e}", exc_info=True)
         error_message = {"role": "assistant", "content": "I encountered an error processing your request."}
         state["messages"] = state.get("messages", []) + [error_message]
-        yield state["messages"], state, "typing-indicator"
+        yield state["messages"], state
 
 def clear_conversation(state: Dict[str, Any]) -> Tuple[List, Dict[str, Any]]:
     new_state = reset_state()
@@ -366,7 +367,7 @@ with gr.Blocks(theme=theme, css=css) as demo:
                 """
                 <div class="sidebar-header">
                     <img src="https://img.icons8.com/fluency/48/000000/shopping-cart.png" alt="Logo">
-                    <h2>E-commerce Support</h2>
+                    <h2>E-commerce Support Assistant</h2>
                 </div>
                 """, elem_id="sidebar-header"
             )
@@ -401,11 +402,8 @@ with gr.Blocks(theme=theme, css=css) as demo:
             feedback = gr.Textbox(placeholder="Share your feedback about this chat experience...", label="Feedback", lines=3)
             submit_btn = gr.Button("Submit Feedback", variant="secondary")
         with gr.Column(scale=3, elem_classes="chat-container"):
-            with gr.Row(elem_classes="chat-header"):
-                gr.Markdown("## E-commerce Support Assistant")
-                clear_btn = gr.Button("Clear Chat", variant="secondary", elem_classes="chat-header-btn")
+            # Removed chat header row with clear button and "E-commerce Support Assistant" text to reduce clutter.
             chatbot = gr.Chatbot([], elem_id="chatbot", avatar_images=("👤", "🤖"), show_copy_button=True, height=500, type="messages")
-            typing_indicator = gr.HTML('<div class="typing-indicator" id="typing-indicator" style="display:none;"><span></span><span></span><span></span> Bot is typing...</div>')
             with gr.Row(elem_classes="input-area"):
                 with gr.Column(scale=4):
                     msg = gr.Textbox(placeholder="Type your message here...", label="Message", show_label=False, container=False)
@@ -418,19 +416,96 @@ with gr.Blocks(theme=theme, css=css) as demo:
                 suggestion3 = gr.Button("I need to speak to a human", elem_classes="suggestion-chip")
                 suggestion4 = gr.Button("What payment methods do you accept?", elem_classes="suggestion-chip")
     
-    send_btn.click(fn=process_message, inputs=[msg, chatbot, state], outputs=[chatbot, state, typing_indicator], api_name="send").then(fn=lambda: "", outputs=msg)
-    msg.submit(fn=process_message, inputs=[msg, chatbot, state], outputs=[chatbot, state, typing_indicator], api_name="submit").then(fn=lambda: "", outputs=msg)
-    clear_btn.click(fn=clear_conversation, inputs=[state], outputs=[chatbot, state], api_name="clear")
-    submit_btn.click(fn=submit_feedback, inputs=[feedback, state], outputs=[state], api_name="feedback").then(fn=lambda: "", outputs=feedback)
-    track_btn.click(fn=track_order, inputs=[order_input, state], outputs=[chatbot, state, typing_indicator], api_name="track").then(fn=lambda: "", outputs=order_input)
-    suggestion1.click(fn=use_suggestion, inputs=[suggestion_text1, state], outputs=[msg, state]).then(fn=process_message, inputs=[msg, chatbot, state], outputs=[chatbot, state, typing_indicator]).then(fn=lambda: "", outputs=msg)
-    suggestion2.click(fn=use_suggestion, inputs=[suggestion_text2, state], outputs=[msg, state]).then(fn=process_message, inputs=[msg, chatbot, state], outputs=[chatbot, state, typing_indicator]).then(fn=lambda: "", outputs=msg)
-    suggestion3.click(fn=use_suggestion, inputs=[suggestion_text3, state], outputs=[msg, state]).then(fn=process_message, inputs=[msg, chatbot, state], outputs=[chatbot, state, typing_indicator]).then(fn=lambda: "", outputs=msg)
-    suggestion4.click(fn=use_suggestion, inputs=[suggestion_text4, state], outputs=[msg, state]).then(fn=process_message, inputs=[msg, chatbot, state], outputs=[chatbot, state, typing_indicator]).then(fn=lambda: "", outputs=msg)
-    faq_btn.click(fn=get_faq_response, inputs=[return_policy_key, state], outputs=[chatbot, state, typing_indicator])
-    returns_btn.click(fn=get_faq_response, inputs=[return_policy_key, state], outputs=[chatbot, state, typing_indicator])
-    shipping_btn.click(fn=get_faq_response, inputs=[shipping_policy_key, state], outputs=[chatbot, state, typing_indicator])
-    contact_btn.click(fn=get_faq_response, inputs=[contact_info_key, state], outputs=[chatbot, state, typing_indicator])
+    send_btn.click(
+        fn=process_message,
+        inputs=[msg, chatbot, state],
+        outputs=[chatbot, state],
+        api_name="send"
+    ).then(fn=lambda: "", outputs=msg)
+    
+    msg.submit(
+        fn=process_message,
+        inputs=[msg, chatbot, state],
+        outputs=[chatbot, state],
+        api_name="submit"
+    ).then(fn=lambda: "", outputs=msg)
+    
+    # Removed clear chat button and its event handler
+    
+    submit_btn.click(
+        fn=submit_feedback,
+        inputs=[feedback, state],
+        outputs=[state],
+        api_name="feedback"
+    ).then(fn=lambda: "", outputs=feedback)
+    
+    track_btn.click(
+        fn=track_order,
+        inputs=[order_input, state],
+        outputs=[chatbot, state],
+        api_name="track"
+    ).then(fn=lambda: "", outputs=order_input)
+    
+    suggestion1.click(
+        fn=use_suggestion,
+        inputs=[suggestion_text1, state],
+        outputs=[msg, state]
+    ).then(
+        fn=process_message,
+        inputs=[msg, chatbot, state],
+        outputs=[chatbot, state]
+    ).then(fn=lambda: "", outputs=msg)
+    
+    suggestion2.click(
+        fn=use_suggestion,
+        inputs=[suggestion_text2, state],
+        outputs=[msg, state]
+    ).then(
+        fn=process_message,
+        inputs=[msg, chatbot, state],
+        outputs=[chatbot, state]
+    ).then(fn=lambda: "", outputs=msg)
+    
+    suggestion3.click(
+        fn=use_suggestion,
+        inputs=[suggestion_text3, state],
+        outputs=[msg, state]
+    ).then(
+        fn=process_message,
+        inputs=[msg, chatbot, state],
+        outputs=[chatbot, state]
+    ).then(fn=lambda: "", outputs=msg)
+    
+    suggestion4.click(
+        fn=use_suggestion,
+        inputs=[suggestion_text4, state],
+        outputs=[msg, state]
+    ).then(
+        fn=process_message,
+        inputs=[msg, chatbot, state],
+        outputs=[chatbot, state]
+    ).then(fn=lambda: "", outputs=msg)
+    
+    faq_btn.click(
+        fn=get_faq_response,
+        inputs=[return_policy_key, state],
+        outputs=[chatbot, state]
+    )
+    returns_btn.click(
+        fn=get_faq_response,
+        inputs=[return_policy_key, state],
+        outputs=[chatbot, state]
+    )
+    shipping_btn.click(
+        fn=get_faq_response,
+        inputs=[shipping_policy_key, state],
+        outputs=[chatbot, state]
+    )
+    contact_btn.click(
+        fn=get_faq_response,
+        inputs=[contact_info_key, state],
+        outputs=[chatbot, state]
+    )
 
 # ===== Health Check and System Status =====
 def health_check():
