@@ -776,11 +776,8 @@ def get_compiled_graph():
 
 # --- detect_intent ---
 
-import re # Ensure re is imported at the top of chatbot.py
-
-# ... (Keep other imports and setup) ...
-
 def detect_intent(message: str) -> Optional[str]:
+    print("DETECT_INTENT_VERSION_CHECK_V5")
     """Detects user intent based on keywords and patterns using prioritized checks."""
     lower_msg = message.lower()
     # Use regex to find the ID, store the match object
@@ -858,8 +855,6 @@ def detect_intent(message: str) -> Optional[str]:
     logger.debug("No specific intent detected, returning None.")
     return None # Default return if nothing matches
 
-# --- Main execution block ---
-# (Keep if __name__ == "__main__": block as is for local testing)
 if __name__ == "__main__":
     try:
         # Ensure credentials are valid before starting
