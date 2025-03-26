@@ -224,12 +224,13 @@ def process_message(message: str, history: List, state: Dict[str, Any], order_id
         cred_results = verify_credentials(["GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"])
         if not all(cred_results.values()):
             raise EnvironmentError("Missing required credentials")
-        state.setdefault("messages", [])  # Ensure "messages" exists
+        state.setdefault("messages", [])
         if state["messages"] and state["messages"][-1]["role"] == "user":
             state["messages"] = state["messages"][:-1]
         if order_id and order_id.strip():
             message = f"What's the status of my order {order_id.strip()}?"
         message = bleach.clean(message)
+        
         formatted_history = []
         if history:
             for h in history:
@@ -244,16 +245,24 @@ def process_message(message: str, history: List, state: Dict[str, Any], order_id
         state["messages"] = formatted_history
         if not state["messages"] or state["messages"][-1]["role"] != "user":
             state["messages"].append({"role": "user", "content": message})
+        
         yield state["messages"], state
+        
         try:
             cred_results = verify_credentials(["GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"])
             if not all(cred_results.values()):
                 raise EnvironmentError("Credentials became invalid during processing")
             updated_state = chat_with_user(message, state)
             if updated_state and "messages" in updated_state:
-                new_messages = [msg for msg in updated_state["messages"] if msg not in state["messages"]]
-                if new_messages:
-                    state["messages"].extend(new_messages)
+                # Deduplicate messages
+                seen = set()
+                deduped_messages = []
+                for msg in updated_state["messages"]:
+                    msg_tuple = (msg["role"], msg["content"])
+                    if msg_tuple not in seen:
+                        seen.add(msg_tuple)
+                        deduped_messages.append(msg)
+                state["messages"] = deduped_messages
                 for key in ["order_lookup_attempted", "current_order_id", "needs_human_agent",
                             "contact_info_collected", "customer_name", "customer_email",
                             "customer_phone", "contact_step"]:
@@ -266,6 +275,7 @@ def process_message(message: str, history: List, state: Dict[str, Any], order_id
             logger.error(f"Error in chat processing: {e}")
             if not any(msg["role"] == "assistant" for msg in state["messages"]):
                 state["messages"].append({"role": "assistant", "content": "I encountered an error processing your request."})
+        
         state["chat_history"] = state["messages"]
         yield state["messages"], state
     except EnvironmentError as e:
