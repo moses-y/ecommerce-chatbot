@@ -776,21 +776,43 @@ def get_compiled_graph():
 
 # --- detect_intent ---
 
+import re # Ensure re is imported at the top of chatbot.py
+
+# ... (Keep other imports and setup) ...
+
 def detect_intent(message: str) -> Optional[str]:
-    """Detects user intent based on keywords and patterns."""
+    """Detects user intent based on keywords and patterns using prioritized checks."""
     lower_msg = message.lower()
-    has_id = bool(re.search(r"\b([a-f0-9]{32})\b", lower_msg)) # Check for ID early
+    # Use regex to find the ID, store the match object
+    id_match = re.search(r"\b([a-f0-9]{32})\b", lower_msg)
+    has_id = bool(id_match)
 
     # --- PRIORITY 1: Order Status ---
-    order_query_words = ["order status", "track my order", "where is my order", "delivery status", "check my order"]
-    # Specific check for "order <id> status" pattern
-    if "order" in lower_msg and "status" in lower_msg and has_id:
-         logger.debug("Detected intent: order_status (specific pattern)")
+    order_query_words = ["order status", "track my order", "where is my order", "delivery status", "check my order", "order", "order ID"]
+
+    # Specific check using regex for "order" and "status" as whole words, plus the ID.
+    # This pattern looks for 'order', then anything (non-greedy), then the ID, then anything, then 'status' OR
+    # 'status', then anything, then the ID, then anything, then 'order'.
+    # Using \b ensures they are whole words. Added flexibility for word order.
+    # Making the pattern non-greedy (.*?) might help if other keywords interfere.
+    if has_id and (re.search(r"\border\b.*?\b[a-f0-9]{32}\b.*?\bstatus\b", lower_msg) or
+                   re.search(r"\bstatus\b.*?\b[a-f0-9]{32}\b.*?\border\b", lower_msg)):
+        logger.debug("Detected intent: order_status (specific regex pattern)")
+        return "order_status"
+
+    # General check for common order query phrases (exact matches)
+    if any(phrase == lower_msg for phrase in order_query_words):
+         logger.debug("Detected intent: order_status (exact query phrase)")
          return "order_status"
-    # General check for order query words OR id + "order" keyword
-    if any(phrase in lower_msg for phrase in order_query_words) or (has_id and "order" in lower_msg):
-         logger.debug("Detected intent: order_status (general)")
-         return "order_status"
+    # General check for common order query phrases (substring matches)
+    if any(phrase in lower_msg for phrase in order_query_words):
+        logger.debug("Detected intent: order_status (substring query phrase)")
+        return "order_status"
+
+    # General check if ID is present and the word "order" is also present as a whole word
+    if has_id and re.search(r"\border\b", lower_msg):
+        logger.debug("Detected intent: order_status (ID + 'order' word)")
+        return "order_status"
     # --- END PRIORITY 1 ---
 
     # --- PRIORITY 2: Human Agent ---
@@ -826,8 +848,15 @@ def detect_intent(message: str) -> Optional[str]:
          return "goodbye"
     # --- END PRIORITY 4 ---
 
+    # --- Fallback: Check if only an ID was provided ---
+    # If has_id is true but no other intent matched, return None (as per the test case)
+    # This check should come *after* all other intent checks.
+    if has_id:
+        logger.debug("Detected only an ID, no specific intent matched.")
+        return None # Explicitly handle the case of just an ID
+
     logger.debug("No specific intent detected, returning None.")
-    return None # Return None if no specific intent matches
+    return None # Default return if nothing matches
 
 # --- Main execution block ---
 # (Keep if __name__ == "__main__": block as is for local testing)
