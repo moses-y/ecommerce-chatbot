@@ -80,24 +80,24 @@ class TestChatbot(unittest.TestCase):
         teardown_test_credentials()
 
 # --- Test detect_intent (Should still work) ---
-def test_detect_intent(self):
+
+def test_detect_intent():
     """Test intent detection logic."""
     cases = {
         "What's your return policy?": "return_policy",
-        "How long does shipping take?": "shipping_policy", # Assuming this maps
-        "What payment methods do you accept?": "payment_methods", # Assuming this maps
+        "How long does shipping take?": "shipping_policy",
+        "What payment methods do you accept?": "payment_methods",
         "I want to speak to a human": "human_agent",
         "What's the status of my order?": "order_status",
         "track my package": "order_status",
         "Hello there": "greeting",
         "thanks bye": "goodbye",
-        "1234567890abcdef1234567890abcdef": None, # ID alone might not trigger intent
+        "1234567890abcdef1234567890abcdef": None,
         "order 1234567890abcdef1234567890abcdef status": "order_status",
-        "order status 1234567890abcdef1234567890abcdef": "order_status", # NEW TEST CASE
+        "order status 1234567890abcdef1234567890abcdef": "order_status",
     }
     for text, expected in cases.items():
-        with self.subTest(text=text):
-            self.assertEqual(detect_intent(text), expected)
+        assert detect_intent(text) == expected
 
     # --- Test Simple FAQ Handling (No Graph Invoke) ---
     def test_faq_response_direct(self):
