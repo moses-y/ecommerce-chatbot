@@ -778,33 +778,27 @@ def get_compiled_graph():
 
 def detect_intent(message: str) -> Optional[str]:
     """Detects user intent based on keywords and patterns using prioritized checks."""
-    print("DETECT_INTENT_VERSION_CHECK_V6") # Increment version check
+    print("DETECT_INTENT_VERSION_CHECK_V7") # Increment again
     lower_msg = message.lower()
-    logger.debug(f"detect_intent called with message: '{message}' (lowercase: '{lower_msg}')")
+    logger.debug(f"detect_intent input: '{message}', lower: '{lower_msg}'") # Added for clarity
 
     # Use regex to find the ID, store the match object
     id_match = re.search(r"\b([a-f0-9]{32})\b", lower_msg)
     has_id = bool(id_match)
-    logger.debug(f"ID found: {has_id}, match: {id_match}")
+    logger.debug(f"ID found: {has_id}")
 
     # --- PRIORITY 1: Order Status ---
-    order_query_words = ["order status", "track my order", "where is my order", "delivery status", "check my order", "order", "order ID"]
-    logger.debug(f"Order query words: {order_query_words}")
+    order_query_words = ["check order status","order status", "track my order", "where is my order", "delivery status", "check my order", "order", "order ID"]
+
+    # --- VERY SPECIFIC DEBUGGING ---
+    pattern_to_test = r"\border\b.*?\b[a-f0-9]{32}\b.*?\bstatus\b"
+    search_result = re.search(pattern_to_test, lower_msg)
+    print(f"DEBUG: Regex '{pattern_to_test}' on '{lower_msg}' -> Result: {search_result}")
+    # --- END SPECIFIC DEBUGGING ---
 
     # Specific check using regex for "order" and "status" as whole words, plus the ID.
-    regex_pattern_order_status_1 = r"\border\b.*?\b[a-f0-9]{32}\b.*?\bstatus\b" # order...id...status
-    regex_pattern_order_status_2 = r"\bstatus\b.*?\b[a-f0-9]{32}\b.*?\border\b" # status...id...order
-
-    logger.debug(f"Regex pattern 1: '{regex_pattern_order_status_1}'")
-    match1 = re.search(regex_pattern_order_status_1, lower_msg)
-    logger.debug(f"Regex match 1: {match1}")
-
-    logger.debug(f"Regex pattern 2: '{regex_pattern_order_status_2}'")
-    match2 = re.search(regex_pattern_order_status_2, lower_msg)
-    logger.debug(f"Regex match 2: {match2}")
-
-
-    if has_id and (match1 or match2): # Use the match variables directly
+    if has_id and (search_result or # Use the stored result
+                   re.search(r"\bstatus\b.*?\b[a-f0-9]{32}\b.*?\border\b", lower_msg)):
         logger.debug("Detected intent: order_status (specific regex pattern)")
         return "order_status"
 
@@ -823,7 +817,50 @@ def detect_intent(message: str) -> Optional[str]:
         return "order_status"
     # --- END PRIORITY 1 ---
 
-    # ... (Rest of the function with similar logging for other checks if needed later) ...
+    # --- PRIORITY 2: Human Agent ---
+    human_keywords = ["speak to a human", "talk to a human", "human representative",
+                      "real person", "speak to an agent", "talk to a representative",
+                      "connect me with a human", "human agent please", "agent", "representative", "live agent"]
+    if any(word in lower_msg for word in human_keywords):
+        logger.debug("Detected intent: human_agent")
+        return "human_agent"
+    # --- END PRIORITY 2 ---
+
+    # --- PRIORITY 3: General FAQs (from config) ---
+    # Ensure FAQ_CONFIG is loaded and structured correctly
+    # Check if FAQ_CONFIG exists and has the expected structure
+    if FAQ_CONFIG and "intent_patterns" in FAQ_CONFIG:
+        for intent, patterns in FAQ_CONFIG["intent_patterns"].items():
+            # Ensure patterns is a list before iterating
+            if isinstance(patterns, list) and any(pattern in lower_msg for pattern in patterns):
+                # Avoid re-classifying intents already handled above
+                if intent not in ["order_status", "human_agent"]:
+                    logger.debug(f"Detected FAQ intent: {intent}")
+                    return intent
+    else:
+        logger.warning("FAQ_CONFIG is missing or not structured correctly. Skipping FAQ intent detection.")
+    # --- END PRIORITY 3 ---
+
+    # --- PRIORITY 4: Greetings & Goodbye ---
+    greeting_words = ["hello", "hi", "hey", "greetings"]
+    # Use word boundaries for more precise matching of greetings
+    if any(re.search(r"\b" + word + r"\b", lower_msg) for word in greeting_words):
+         logger.debug("Detected intent: greeting")
+         return "greeting"
+
+    goodbye_words = ["bye", "goodbye", "see you", "later", "exit", "quit", "that's all", "no thanks"]
+    # Use word boundaries for more precise matching of goodbyes
+    if any(re.search(r"\b" + word + r"\b", lower_msg) for word in goodbye_words):
+         logger.debug("Detected intent: goodbye")
+         return "goodbye"
+    # --- END PRIORITY 4 ---
+
+    # --- Fallback: Check if only an ID was provided ---
+    # If has_id is true but no other intent matched, return None (as per the test case)
+    # This check should come *after* all other intent checks.
+    if has_id:
+        logger.debug("Detected only an ID, no specific intent matched.")
+        return None # Explicitly handle the case of just an ID
 
     logger.debug("No specific intent detected, returning None.")
     return None # Default return if nothing matches
