@@ -5,7 +5,7 @@ import os
 import sys
 import pandas as pd
 import json
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any, Optional, List
 from datetime import datetime
 from functools import lru_cache
 import logging # Added logging
