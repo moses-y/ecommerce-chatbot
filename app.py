@@ -5,9 +5,7 @@ from datetime import datetime
 
 print("===== Application Startup at", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), "=====")
 
-
 # ==== Initialize_Credentials ====
-
 def initialize_credentials():
     """Initialize Google credentials from environment variables"""
     try:
@@ -57,9 +55,7 @@ from src.config import CONVERSATION_CONFIG, FAQ_CONFIG
 from src.state_utils import reset_state, update_state_from_result
 from src.credentials import verify_credentials
 
-
 # ===== Initialize services with credential verification =====
-
 def initialize_services():
     """Initialize all required services with proper credential verification."""
     logger.info("Initializing services...")
@@ -93,10 +89,11 @@ except Exception as e:
 
 # ===== UI Configuration =====
 
-# Define a modern theme with light brown and light blue tones using glassmorphism effects
+# Define a modern theme with light brown and light blue tones using glassmorphism effects.
+# NOTE: Instead of using hex codes in the theme's hue parameters, we use valid built-in color names.
 theme = gr.themes.Soft(
-    primary_hue="#A1887F",          # light brown
-    secondary_hue="#81D4FA",        # light blue
+    primary_hue="teal",          # Using built-in color name instead of "#A1887F"
+    secondary_hue="indigo",      # Using built-in color name instead of "#81D4FA"
     neutral_hue="slate",
     font=["Inter", "SF Pro Display", "system-ui", "sans-serif"],
     radius_size=gr.themes.sizes.radius_sm,
@@ -230,7 +227,6 @@ css = """
 """
 
 # ===== Helper Functions =====
-
 def process_message(message: str, history: List, state: Dict[str, Any], order_id: str = None) -> Tuple[List, Dict[str, Any], str]:
     """Process user message and generate response."""
     try:
@@ -266,8 +262,8 @@ def process_message(message: str, history: List, state: Dict[str, Any], order_id
                 new_messages = [msg for msg in updated_state["messages"] if msg not in state["messages"]]
                 if new_messages:
                     state["messages"].extend(new_messages)
-                for key in ["order_lookup_attempted", "current_order_id", "needs_human_agent", 
-                            "contact_info_collected", "customer_name", "customer_email", 
+                for key in ["order_lookup_attempted", "current_order_id", "needs_human_agent",
+                            "contact_info_collected", "customer_name", "customer_email",
                             "customer_phone", "contact_step"]:
                     if key in updated_state:
                         state[key] = updated_state[key]
@@ -353,7 +349,6 @@ def get_faq_response(faq_key: str, state: Dict[str, Any]) -> Tuple[List, Dict[st
     return history, new_state, ""
 
 # ===== Gradio Interface =====
-
 with gr.Blocks(theme=theme, css=css) as demo:
     state = gr.State(value=reset_state())
     suggestion_text1 = gr.State("What's your return policy?")
@@ -438,7 +433,6 @@ with gr.Blocks(theme=theme, css=css) as demo:
     contact_btn.click(fn=get_faq_response, inputs=[contact_info_key, state], outputs=[chatbot, state, typing_indicator])
 
 # ===== Health Check and System Status =====
-
 def health_check():
     """Verify system health and credential status."""
     try:
