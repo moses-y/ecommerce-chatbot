@@ -177,11 +177,16 @@ def create_order_vector_db(orders_df: Optional[pd.DataFrame],
 
         return collection
     except Exception as e:
-        print(f"Error creating vector database: {e}")
-        # Create an empty collection as last resort
-        collection = client.create_collection(name="orders")
-        print("Created empty collection as fallback")
-        return collection
+        print(f"Error creating or populating vector database: {e}")
+        # ADD proper logging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to create/populate vector DB: {e}", exc_info=True)
+        # REMOVE or comment out the fallback empty collection:
+        # collection = client.create_collection(name="orders")
+        # print("Created empty collection as fallback")
+        # return collection
+        raise # Re-raise the exception
 
 def query_vector_db(query: str, collection: Optional[chromadb.Collection] = None, top_k: int = 5) -> List[Dict[str, Any]]:
     """
@@ -288,36 +293,16 @@ def get_orders_by_customer_id(customer_id: str, collection: Optional[chromadb.Co
         print(f"Error getting orders by customer ID: {e}")
         return []
 
-# In-memory cache for faster lookups
-_MEMORY_CACHE = {}
-
 @lru_cache(maxsize=1000)
 def cached_get_order_by_id(order_id, collection=None):
-    """Cached version of get_order_by_id for faster lookups"""
-    # Check memory cache first
-    cache_key = f"order_{order_id}"
-    if cache_key in _MEMORY_CACHE:
-        return _MEMORY_CACHE[cache_key]
-
-    # Then check vector DB
+    """Cached version of get_order_by_id using lru_cache."""
+    # Directly call the function; lru_cache handles the rest.
     result = get_order_by_id(order_id, collection)
-
-    # Cache the result
-    if result:
-        _MEMORY_CACHE[cache_key] = result
-
     return result
 
 @lru_cache(maxsize=1000)
 def cached_get_orders_by_customer_id(customer_id, collection=None):
-    """Cached version of get_orders_by_customer_id for faster lookups"""
-    cache_key = f"customer_{customer_id}"
-    if cache_key in _MEMORY_CACHE:
-        return _MEMORY_CACHE[cache_key]
-
+    """Cached version of get_orders_by_customer_id using lru_cache."""
+    # Directly call the function; lru_cache handles the rest.
     result = get_orders_by_customer_id(customer_id, collection)
-
-    if result:
-        _MEMORY_CACHE[cache_key] = result
-
     return result
