@@ -205,7 +205,7 @@ def lookup_order(state: ChatbotState) -> ChatbotState:
 
     message = new_state["messages"][-1]["content"]
     # Relax regex slightly to allow potential leading/trailing spaces if needed, but keep core pattern
-    match = re.search(r'\b([a-f0-9]{32})\b', message)
+    match = re.search(r'([a-f0-9]{32})', message)
 
     if match:
         extracted_id = match.group(1)
