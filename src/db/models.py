@@ -36,7 +36,8 @@ class ContactRequest(Base):
     full_name = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False, index=True) # Index for potential lookups
     phone_number = Column(String(50), nullable=True) # Allow phone to be optional maybe?
-    request_timestamp = Column(DateTime, default=datetime.datetime.now(datetime.UTC)) # Store timestamp
+    # This is CORRECT
+    request_timestamp = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
     notes = Column(Text, nullable=True) # Optional field for context
 
     def __repr__(self):
