@@ -12,64 +12,67 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Use the Python version you are developing and testing with locally
-        python-version: ["3.11"] # Or 3.10 if you prefer consistency with old file
+        python-version: ["3.11"]
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4 # Use latest checkout action
+      uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5 # Use latest setup-python action
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Create virtual environment
+      run: python -m venv .venv
+
     - name: Install uv
-      run: pip install uv
+      run: |
+        source .venv/bin/activate
+        pip install uv
 
     - name: Install dependencies
-      run: uv pip install -r requirements.txt
+      run: |
+        source .venv/bin/activate
+        uv pip install -r requirements.txt
 
     - name: Create .env file for tests
       run: |
         echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> .env
-        # Add other non-secret env vars if needed by tests, e.g., DB path
         echo "DATABASE_URL=sqlite:///./chatbot_ci_test.db" >> .env
-      # Note: No need for GOOGLE_APPLICATION_CREDENTIALS if using API key for Gemini
 
     - name: Run tests
       run: |
-        # Ensure PYTHONPATH includes the src directory if needed for imports
+        source .venv/bin/activate
         export PYTHONPATH=${{ github.workspace }}
         pytest -v
       env:
-        # Pass secrets directly as env vars to the test step
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-        # Add HUGGINGFACE_TOKEN if tests require it (unlikely for unit tests)
-        # HUGGINGFACE_TOKEN: ${{ secrets.HF_TOKEN }}
 
   deploy-to-hf-space:
-    needs: test # Run after tests pass
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' # Deploy only on push to main
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Need full history to push
+          fetch-depth: 0
+
+      - name: Create virtual environment
+      run: python -m venv .venv
 
       - name: Install uv and Hugging Face Hub library
         run: |
+          source .venv/bin/activate
           pip install uv
-          uv pip install huggingface-hub # Only need this for pushing
+          uv pip install huggingface-hub
 
       - name: Push to Hugging Face Space
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }} # Use the HF_TOKEN secret
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Actions"
-          # Add the remote for your Hugging Face Space
           git remote add space https://MoeTensors:$HF_TOKEN@huggingface.co/spaces/MoeTensors/E-commerce_chatbot
-          # Force push the main branch to the Space (common practice for HF Spaces)
           git push --force space main
