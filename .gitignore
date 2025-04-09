@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+
+# Virtual Environment
+venv/
+.env/
+.venv/
+ENV/
+
+# Environment Variables and Secrets
+.env
+*.pem
+*.key
+credentials/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Development
+data/chatbot_data.db
+
+# Gradio
+.gradio/
+gradio_cached_examples/

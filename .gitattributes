@@ -1,0 +1,24 @@
+# Set default behavior for all files to normalize line endings to LF on checkout
+* text=auto eol=lf
+
+# Explicitly declare files that should always have LF line endings
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Declare files that should be treated as binary and not have line endings modified
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+*.pem binary

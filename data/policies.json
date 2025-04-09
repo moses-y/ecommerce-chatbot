@@ -1,0 +1,15 @@
+{
+    "general_return_policy": {
+      "window": "30 days from delivery",
+      "condition": "Item must be unused, in original packaging, with tags attached.",
+      "process": "Contact customer support to initiate a return.",
+      "refund_type": "Refund to original payment method or store credit.",
+      "exceptions": "Final sale items, perishable goods, and gift cards cannot be returned."
+    },
+    "electronics_policy": {
+       "window": "15 days from delivery",
+       "condition": "Must include all original accessories and packaging. Restocking fee may apply if opened.",
+       "process": "Contact support for RMA number before returning.",
+       "exceptions": ["Software is non-refundable once opened."] 
+    }
+  }

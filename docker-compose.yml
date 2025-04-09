@@ -1,0 +1,15 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  chatbot:
+    build: .
+    container_name: ari-ecommerce-chatbot-local # Name for local container
+    ports:
+      - "7860:7860"
+    env_file:
+      - .env # Loads your local .env file for GOOGLE_API_KEY etc.
+    volumes:
+      # Mount the data directory for persistence of the SQLite DB locally
+      - ./data:/app/data
+    restart: unless-stopped

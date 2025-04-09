@@ -1,0 +1,52 @@
+# mkdocs.yml
+site_name: Ari - E-commerce Chatbot
+site_url: https://moses-y.github.io/ecommerce-chatbot/ # Adjusted
+repo_url: https://github.com/moses-y/ecommerce-chatbot/ # Adjusted
+repo_name: moses-y/ecommerce-chatbot # Adjusted
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.annotation
+    - content.code.copy
+
+plugins:
+  - search
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - attr_list
+  - md_in_html
+
+nav:
+  - Home: index.md
+  - User Guide: usage.md
+  - Development:
+    - Setup: development/setup.md
+    - Architecture: development/architecture.md # Review this file
+    - Testing: development/testing.md
+    - Deployment: development/deployment.md
+  # - API Reference: # Optional
