@@ -4,12 +4,18 @@ build:
     - python3.11-venv
   python_version: "3.11"
   python_packages:
-    - "gradio>=4.19.2"
-    - "sqlalchemy>=2.0.0"
-    - "google-generativeai>=0.3.0"
-    - "langchain>=0.1.0"
-    - "python-dotenv>=1.0.0"
+    - "pandas==2.2.3"
+    - "numpy==1.26.4"
+    - "python-dotenv==1.0.1"
+    - "gradio==5.22.0"
+    - "google-generativeai==0.8.3"
+    - "pydantic==2.10.6"
+    - "sqlalchemy"
+    - "alembic"
+    - "huggingface-hub==0.29.3"
+    - "regex"
 
 runtime:
   env:
-    - PYTHON_PATH=/home/user/app
+    - PYTHON_PATH=/app
+    - HF_SPACE=true

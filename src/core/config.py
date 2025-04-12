@@ -2,6 +2,7 @@
 import os
 from dotenv import load_dotenv
 import logging # Added
+from pathlib import Path
 
 load_dotenv()
 logger = logging.getLogger(__name__) # Added
@@ -15,7 +16,8 @@ else:
     logger.info("GOOGLE_API_KEY loaded successfully.")
 
 # --- Database Configuration ---
-DATA_DIR = "data"
+ROOT_DIR = Path(__file__).parent.parent.parent
+DATA_DIR = os.path.join(ROOT_DIR, "data")
 DATABASE_NAME = "chatbot_data.db"
 DB_PATH = os.path.join(DATA_DIR, DATABASE_NAME)
 # SQLAlchemy Database URL

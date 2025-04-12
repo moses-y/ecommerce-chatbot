@@ -1,37 +1,37 @@
 # Dockerfile
-
-# Use an official Python runtime matching your development environment
 FROM python:3.11-slim
 
-# Set environment variables for Python
+# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
+ENV PYTHONPATH=/app
+ENV HF_SPACE=true
 
 # Set the working directory
 WORKDIR /app
 
-# Install uv first
-# Copy only requirements to leverage Docker cache
+# Install requirements
 COPY requirements.txt .
 RUN pip install uv && \
     uv pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code into the container
-# This includes app.py, src/, tests/, etc.
+# Copy the application code
 COPY . .
 
-# --- Additions based on your code ---
-# Create the data directory inside the container
-RUN mkdir -p /app/data
-# Copy the necessary policy file into the container's data directory
+# Create necessary directories and ensure proper permissions
+RUN mkdir -p /app/data /app/assets && \
+    chmod -R 777 /app/data
+
+# Copy data files with explicit permissions
 COPY data/policies.json /app/data/policies.json
-
-# Copy the assets directory into the container
+COPY data/cached_orders.csv /app/data/cached_orders.csv
 COPY assets /app/assets
-# --- End Additions ---
 
-# Expose the port Gradio runs on (defined in gradio_app.py launch())
+# Set permissions for data files
+RUN chmod 644 /app/data/policies.json /app/data/cached_orders.csv
+
+# Expose Gradio port
 EXPOSE 7860
 
-# Define the command to run your application using the root app.py script
-CMD ["python", "app.py"]
+# Initialize database and start app
+CMD ["sh", "-c", "python -m src.db.setup_db && python app.py"]

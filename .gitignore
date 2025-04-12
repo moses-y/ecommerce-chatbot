@@ -34,6 +34,7 @@ credentials/
 *.db
 *.sqlite
 *.sqlite3
+!data/chatbot_data.db  # Include this for Hugging Face deployment
 
 # IDE
 .vscode/
@@ -49,8 +50,17 @@ credentials/
 htmlcov/
 
 # Local Development
-data/chatbot_data.db
+# Comment out or remove this line to include database for Hugging Face
+# data/chatbot_data.db
 
 # Gradio
 .gradio/
 gradio_cached_examples/
+
+# Keep essential data files for Hugging Face deployment
+!data/
+!data/cached_orders.csv
+!data/policies.json
+!assets/
+!assets/bot-icon.png
+!assets/user-icon.png
