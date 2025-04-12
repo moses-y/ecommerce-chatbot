@@ -148,28 +148,33 @@ async def test_order_status_agent_found(
     response_data_1 = await conversation_manager.handle_message(user_input_1, test_session_id)
 
     assert "Please provide the 32-character alphanumeric order ID" in response_data_1["response"]
+    # *** MODIFICATION START: Assert Step 1 call immediately ***
     mock_llm_service.determine_intent.assert_called_once_with(
         user_input=user_input_1,
         available_intents=conversation_manager.intents, # Use actual intents
-        history=[] # Assuming history is empty initially for this session
+        history=[] # History IS empty for the *first* call in this session
     )
+    # *** MODIFICATION END ***
     mock_order_service.get_order_status_by_id.assert_not_called()
 
     # --- Step 2: User provides ONLY the order ID -> Agent provides status ---
     user_input_2 = order_id # Pass the 32-char ID directly
-    mock_llm_service.determine_intent = MagicMock(return_value='check_order_status') # Sync mock again for step 2
-    # *** MODIFICATION START ***
+    # *** MODIFICATION START: Reset mock for Step 2 ***
+    mock_llm_service.determine_intent.reset_mock()
+    mock_llm_service.determine_intent.return_value = 'check_order_status' # Re-assign mock for step 2
+    # *** MODIFICATION END ***
+
     # Mock the async method to return the FORMATTED string, like the real service does
     expected_formatted_details = format_order_details(sample_order_data_found)
     mock_order_service.get_order_status_by_id.return_value = expected_formatted_details
-    # *** MODIFICATION END ***
 
     response_data_2 = await conversation_manager.handle_message(user_input_2, test_session_id)
 
     assert response_data_2["response"] == expected_formatted_details
     mock_order_service.get_order_status_by_id.assert_called_once_with(order_id)
+    # *** MODIFICATION START: Assert Step 2 call ***
     # Check intent determination for the second message
-    mock_llm_service.determine_intent.assert_called_once()
+    mock_llm_service.determine_intent.assert_called_once() # Check it was called once *since reset*
     args_step2, kwargs_step2 = mock_llm_service.determine_intent.call_args
     assert kwargs_step2.get('user_input') == user_input_2
     assert kwargs_step2.get('available_intents') == conversation_manager.intents
@@ -180,6 +185,7 @@ async def test_order_status_agent_found(
     assert history_step2[0]['text'] == user_input_1 # Check history content
     assert history_step2[1]['role'] == 'model'
     assert history_step2[1]['text'] == response_data_1["response"] # Check history content
+    # *** MODIFICATION END ***
 
 
 @pytest.mark.asyncio
@@ -201,33 +207,45 @@ async def test_order_status_agent_not_found(
     response_data_1 = await conversation_manager.handle_message(user_input_1, test_session_id)
 
     assert "Please provide the 32-character alphanumeric order ID" in response_data_1["response"]
+    # *** MODIFICATION START: Assert Step 1 call immediately ***
     mock_llm_service.determine_intent.assert_called_once_with(
         user_input=user_input_1,
         available_intents=conversation_manager.intents, # Use actual intents
-        history=[]
+        history=[] # History IS empty for the *first* call in this session
     )
+    # *** MODIFICATION END ***
     mock_order_service.get_order_status_by_id.assert_not_called()
 
     # --- Step 2: User provides ONLY the (non-existent) order ID -> Agent says not found ---
     user_input_2 = non_existent_order_id
-    mock_llm_service.determine_intent = MagicMock(return_value='check_order_status') # Sync mock again
-    # *** MODIFICATION START ***
+    # *** MODIFICATION START: Reset mock for Step 2 ***
+    mock_llm_service.determine_intent.reset_mock()
+    mock_llm_service.determine_intent.return_value = 'check_order_status' # Re-assign mock for step 2
+    # *** MODIFICATION END ***
+
     # Mock the async method to return the 'not found' string, like the real service does
     expected_not_found_msg = f"Sorry, I couldn't find any order with the ID '{non_existent_order_id}'. Please double-check the ID."
     mock_order_service.get_order_status_by_id.return_value = expected_not_found_msg
-    # *** MODIFICATION END ***
 
     response_data_2 = await conversation_manager.handle_message(user_input_2, test_session_id)
 
     # Use 'in' for flexibility or check exact match if service guarantees it
     assert response_data_2["response"] == expected_not_found_msg
     mock_order_service.get_order_status_by_id.assert_called_once_with(non_existent_order_id)
+    # *** MODIFICATION START: Assert Step 2 call ***
     # Check intent determination for the second message
-    mock_llm_service.determine_intent.assert_called_once()
+    mock_llm_service.determine_intent.assert_called_once() # Check it was called once *since reset*
     args_step2, kwargs_step2 = mock_llm_service.determine_intent.call_args
     assert kwargs_step2.get('user_input') == user_input_2
     assert kwargs_step2.get('available_intents') == conversation_manager.intents
-    assert len(kwargs_step2.get('history', [])) == 2 # Check history includes first turn
+    # History should now contain the first interaction
+    history_step2 = kwargs_step2.get('history', [])
+    assert len(history_step2) == 2 # user_input_1, response_data_1
+    assert history_step2[0]['role'] == 'user'
+    assert history_step2[0]['text'] == user_input_1 # Check history content
+    assert history_step2[1]['role'] == 'model'
+    assert history_step2[1]['text'] == response_data_1["response"] # Check history content
+    # *** MODIFICATION END ***
 
 # --- Helper Function Tests (Synchronous - NO CHANGES NEEDED HERE) ---
 
