@@ -161,7 +161,8 @@ class ConversationManager:
             # If no specific flow active, determine intent
             logger.debug("Determining intent using LLM service...")
             # Use determine_intent which might be simpler than determine_intent_and_entities
-            detected_intent = await self.llm_service.determine_intent( # Assuming determine_intent is async
+            # determine_intent is synchronous, so no await needed
+            detected_intent = self.llm_service.determine_intent(
                 user_input=user_input,
                 available_intents=self.intents,
                 history=state.get_history() # Provide history for context
@@ -193,7 +194,7 @@ class ConversationManager:
         elif intent == 'general_query' or intent == 'unknown':
             logger.info("Handling as general query using LLM.")
             # Use the LLM's general generation capability
-            bot_response = await self.llm_service.generate_response( # Assuming generate_response is async
+            bot_response = self.llm_service.generate_response( # generate_response is synchronous
                 prompt=user_input, # Pass user input directly
                 history=state.get_history() # Provide history
             )

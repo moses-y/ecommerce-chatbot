@@ -85,7 +85,7 @@ class GeminiService(LLMInterface):
         # Create a chat session *for this specific request* using the history
         # Note: Gemini API manages history state within the session object if you reuse it,
         # but passing history explicitly like this is often clearer for stateless web apps.
-        chat_session = self.model.start_chat(history=chat_history)
+        # Moved inside try block
 
         # Prepare generation config overrides if any
         current_gen_config = self.generation_config
@@ -108,6 +108,8 @@ class GeminiService(LLMInterface):
 
 
         try:
+            # Start the chat session *inside* the try block
+            chat_session = self.model.start_chat(history=chat_history)
             logger.debug(f"Sending prompt to Gemini: '{prompt[:100]}...' with history length: {len(chat_history)}")
             # Send the new prompt to the chat session
             response = chat_session.send_message(

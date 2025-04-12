@@ -71,8 +71,9 @@ class OrderStatusAgent(BaseAgent):
 
                 if order_data:
                     logger.info(f"Order found for ID {order_id}. Formatting details.")
-                    formatted_response = format_order_details(order_data)
-                    return formatted_response
+                    # The order_data received from the service is already the formatted string.
+                    # No need to call format_order_details again.
+                    return order_data # Return the formatted string directly
                 else:
                     logger.warning(f"Order ID {order_id} not found by OrderService.")
                     return f"Sorry, I couldn't find any order with the ID '{order_id}'. Please double-check the ID."
