@@ -1,9 +1,12 @@
+# app.py is the main entry point for the Gradio application.
 import logging
 import os
 from pathlib import Path
+from sqlalchemy import text, select, func
 from src.ui.gradio_app import main
 from src.db.setup_db import create_tables, load_orders_from_csv
 from src.db.database import SessionLocal
+from src.db.models import Order  # Import the Order model
 
 def setup_logging():
     """Configure logging for the application"""
@@ -20,8 +23,9 @@ def ensure_database():
         create_tables()
         db = SessionLocal()
         try:
-            # Check if we need to load initial data
-            order_count = db.execute("SELECT COUNT(*) FROM orders").scalar()
+            # Use SQLAlchemy's ORM query instead of raw SQL
+            order_count = db.query(func.count(Order.order_id)).scalar()
+
             if order_count == 0:
                 logger.info("No orders found in database, loading initial data...")
                 load_orders_from_csv(db)
