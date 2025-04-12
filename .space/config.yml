@@ -19,3 +19,6 @@ runtime:
   env:
     - PYTHON_PATH=/app
     - HF_SPACE=true
+  storage:
+    - mount: /app/data
+      persistence: true

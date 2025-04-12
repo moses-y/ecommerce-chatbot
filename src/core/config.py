@@ -16,8 +16,17 @@ else:
     logger.info("GOOGLE_API_KEY loaded successfully.")
 
 # --- Database Configuration ---
-ROOT_DIR = Path(__file__).parent.parent.parent
-DATA_DIR = os.path.join(ROOT_DIR, "data")
+# --- Database Configuration ---
+IS_HUGGINGFACE = os.environ.get('HF_SPACE') == 'true'
+
+if IS_HUGGINGFACE:
+    # Use absolute paths for Hugging Face
+    DATA_DIR = "/app/data"
+else:
+    # Use relative paths for local development
+    ROOT_DIR = Path(__file__).parent.parent.parent
+    DATA_DIR = os.path.join(ROOT_DIR, "data")
+
 DATABASE_NAME = "chatbot_data.db"
 DB_PATH = os.path.join(DATA_DIR, DATABASE_NAME)
 # SQLAlchemy Database URL

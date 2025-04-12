@@ -37,6 +37,49 @@ def ensure_database():
         logger.error(f"Database setup error: {e}", exc_info=True)
         raise
 
+def verify_database():
+    """Verify database setup and permissions"""
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Check data directory permissions
+        data_dir = "/app/data" if os.environ.get('HF_SPACE') == 'true' else "data"
+        os.makedirs(data_dir, exist_ok=True)
+
+        # Verify write permissions
+        test_file = os.path.join(data_dir, "test_write.tmp")
+        try:
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            logger.info("Data directory is writable")
+        except Exception as e:
+            logger.error(f"Data directory write test failed: {e}")
+            raise
+
+        # Create and verify database
+        create_tables()
+        db = SessionLocal()
+        try:
+            # Verify orders table
+            order_count = db.query(func.count(Order.order_id)).scalar()
+            logger.info(f"Orders table verified with {order_count} records")
+
+            # Verify contact_requests table
+            from src.db.models import ContactRequest
+            contact_count = db.query(func.count(ContactRequest.id)).scalar()
+            logger.info(f"ContactRequest table verified with {contact_count} records")
+
+            if order_count == 0:
+                logger.info("Loading initial order data...")
+                load_orders_from_csv(db)
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Database verification failed: {e}")
+        raise
+
 if __name__ == "__main__":
     setup_logging()
     logger = logging.getLogger(__name__)
@@ -48,6 +91,7 @@ if __name__ == "__main__":
 
         # Always ensure database is set up
         ensure_database()
+        verify_database()
 
         # Launch the Gradio app
         logger.info("Starting Gradio application...")

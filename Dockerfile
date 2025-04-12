@@ -18,19 +18,20 @@ RUN pip install uv && \
 # Copy the application code
 COPY . .
 
-# Create necessary directories and ensure proper permissions
-RUN mkdir -p /app/data /app/assets && \
-    chmod -R 777 /app/data
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/data && \
+    chmod -R 777 /app/data && \
+    mkdir -p /app/assets && \
+    chmod -R 777 /app/assets
 
-# Copy data files with explicit permissions
+# Copy and set permissions for data files
 COPY data/policies.json /app/data/policies.json
 COPY data/cached_orders.csv /app/data/cached_orders.csv
-COPY assets /app/assets
+COPY assets/* /app/assets/
+RUN chmod 666 /app/data/policies.json /app/data/cached_orders.csv && \
+    chmod 666 /app/data/chatbot_data.db || true
 
-# Set permissions for data files
-RUN chmod 644 /app/data/policies.json /app/data/cached_orders.csv
-
-# Expose Gradio port
+    # Expose Gradio port
 EXPOSE 7860
 
 # Initialize database and start app
