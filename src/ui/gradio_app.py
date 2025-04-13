@@ -147,95 +147,350 @@ def clear_chat_action() -> Tuple[List[Tuple[Optional[str], Optional[str]]], str,
 
 # Minimal CSS for responsiveness and slight adjustments
 modern_css = """
-/* Limit overall width on larger screens */
+:root {
+    --primary: #6366f1;
+    --primary-dark: #4f46e5;
+    --text: white; /* Changed to white */
+    --text-light: #cccccc; /* Light gray for secondary text */
+    --glass: rgba(0, 0, 0, 0.25); /* Dark translucent glass */
+    --glass-border: rgba(255, 255, 255, 0.1); /* Subtle light border */
+    --glass-shadow: rgba(0, 0, 0, 0.1);
+    --glass-highlight: rgba(255, 255, 255, 0.4);
+    --input-bg: rgba(0, 0, 0, 0.2); /* Darker input background */
+    --input-border: rgba(255, 255, 255, 0.15);
+    --input-focus-bg: rgba(0, 0, 0, 0.3);
+    --input-focus-border: var(--primary); /* Keep primary focus border */
+    --input-focus-shadow: rgba(99, 102, 241, 0.2); /* Adjust focus shadow */
+    --bubble-bot-bg: rgba(255, 255, 255, 0.7);
+    --bubble-user-bg: rgba(99, 102, 241, 0.2);
+}
+
+body {
+    background: linear-gradient(135deg, #1a202c, #2d3748) !important; /* Dark gradient */
+    font-family: 'Inter', sans-serif !important;
+    color: var(--text) !important; /* Ensure body text defaults to black */
+}
+
+/* --- Base Styles (Simplified) --- */
+/* Removed .glass-card base as we are simplifying */
+
+/* Optional: Add hover effect if desired (Can be applied selectively)
+.element-with-hover:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.15) !important;
+} */
+
+/* --- Glass Input Base --- */
+.glass-input {
+    background: var(--input-bg) !important;
+    backdrop-filter: blur(5px) !important;
+    -webkit-backdrop-filter: blur(5px) !important;
+    border: 1px solid var(--input-border) !important;
+    transition: all 0.3s ease !important;
+    border-radius: 0.75rem !important; /* 12px */
+}
+.glass-input:focus, .glass-input:focus-within { /* Apply to container on focus */
+    background: var(--input-focus-bg) !important;
+    border-color: var(--input-focus-border) !important;
+    box-shadow: 0 0 0 3px var(--input-focus-shadow) !important;
+}
+
+/* --- Glass Button Base --- */
+.glass-button {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important;
+    color: white !important;
+    border: none !important;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+    border-radius: 0.75rem !important; /* 12px */
+    padding: 0.6rem 1.2rem !important; /* Adjust padding */
+    font-weight: 500 !important;
+}
+.glass-button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15) !important;
+    background: linear-gradient(135deg, var(--primary-dark), var(--primary)) !important;
+}
+.glass-button:active {
+    transform: translateY(0) !important;
+}
+
+/* --- Gradio Specific Styling --- */
+
+/* Main Container - Simplified for a single outline */
 .gradio-container {
-    max-width: 900px !important;
+    max-width: 1000px !important; /* Slightly reduced width */
+    margin: 3rem auto !important;
+    padding: 2rem 2.5rem !important;
+    border-radius: 1.5rem !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important; /* Slightly stronger shadow */
+    background: var(--glass) !important; /* Dark glass */
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid var(--glass-border) !important; /* Light border on dark glass */
+    overflow: visible !important; /* Allow shadow to show */
+}
+
+/* Hero Section (Keep distinct background, adjust padding) */
+.hero-section {
+    background: transparent !important; /* Make hero background transparent */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 0 2rem 0 !important; /* Padding only at the bottom */
+    text-align: center;
+    border-bottom: 1px solid var(--glass-border) !important; /* Use glass border for separator */
+}
+.hero-section h1 {
+    font-size: 2.25rem !important;
+    font-weight: 600 !important;
+    color: var(--text) !important; /* White text */
+    margin-bottom: 0.5rem !important;
+    /* Optional: Gradient text (removed for black text request) */
+    /* background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important; */
+}
+.hero-section p {
+    font-size: 1.1rem !important;
+    color: var(--text-light) !important; /* Light gray text */
+    margin-bottom: 0 !important;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Chat Container (Holds Chatbot, Input, Clear) */
+.chat-container {
+    padding: 1.5rem 0 0 0 !important; /* Padding only at the top */
+}
+
+/* Chatbot Area (The message history box) */
+.chatbot-area > .wrap { /* Ensure chat history area is visually gone */
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important; /* Remove padding */
+    box-shadow: none !important;
+    margin: 0 !important; /* Remove margin */
+}
+.chatbot-area .message-wrap { /* Container for bubbles */
+    background: transparent !important; /* Make inner container transparent */
+}
+
+/* Chat Bubbles */
+.chatbot-area .message {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0.5rem 0 !important;
+    max-width: 100% !important; /* Allow text to span wider */
+    border-radius: 0 !important; /* No radius on the message container */
+}
+.chatbot-area .message > div:first-child { /* Style the text content block */
+    padding: 0.5rem 0.8rem !important; /* Reduced padding */
+    border-radius: 8px !important; /* Subtle rounding for text block */
+    backdrop-filter: none !important; /* No blur on text block */
+    -webkit-backdrop-filter: none !important;
+    transition: none !important; /* No transition */
+    background: transparent !important; /* Make bubble background transparent */
+    border: none !important; /* Remove bubble border */
+    box-shadow: none !important; /* Remove bubble shadow */
+    color: var(--text) !important; /* Ensure text is white */
+    display: inline-block; /* Allow text block to size naturally */
+    max-width: 80%; /* Limit width of the text block itself */
+}
+/* Remove specific user/bot bubble backgrounds/borders */
+.chatbot-area .message.user > div:first-child {
+    /* background: transparent !important; */ /* Already set above */
     margin-left: auto !important;
+    /* border: none !important; */ /* Already set above */
+    text-align: right; /* Align text right for user */
+}
+.chatbot-area .message.bot > div:first-child {
+    /* background: transparent !important; */ /* Already set above */
     margin-right: auto !important;
+    /* border: none !important; */ /* Already set above */
+    text-align: left; /* Align text left for bot */
+}
+/* Adjust avatar spacing if needed */
+.chatbot-area .message .avatar-container { margin: 0 0.5rem; }
+
+/* Input Row */
+.input-row {
+    gap: 0.75rem !important; /* Increase gap slightly */
+    align-items: stretch !important; /* Align items top */
+    margin-top: 1rem !important;
+}
+.input-row .gr-textbox { /* Container for textarea */
+    flex-grow: 1 !important;
+    border-radius: 0.75rem !important; /* Match glass-input */
+    background: transparent !important; /* Make container transparent */
+    border: none !important; /* Remove container border */
+    padding: 0 !important; /* Remove container padding */
+}
+.input-row .gr-textbox textarea {
+    background: var(--input-bg) !important;
+    backdrop-filter: blur(5px) !important;
+    -webkit-backdrop-filter: blur(5px) !important;
+    border: 1px solid var(--input-border) !important;
+    transition: all 0.3s ease !important;
+    border-radius: 0.75rem !important; /* 12px */
+    padding: 0.8rem 1rem !important; /* Adjust padding */
+    min-height: 50px !important; /* Ensure decent height */
+    color: var(--text) !important; /* Ensure input text is white */
+}
+.input-row .gr-textbox textarea:focus {
+    background: var(--input-focus-bg) !important;
+    border-color: var(--input-focus-border) !important;
+    box-shadow: 0 0 0 3px var(--input-focus-shadow) !important;
+    outline: none !important;
 }
 
-/* Ensure input row elements have some minimum width */
-.input-row > * {
-    min-width: 50px;
+/* Send Button */
+.input-row .gr-button.primary {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important;
+    color: white !important;
+    border: none !important;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+    border-radius: 0.75rem !important; /* 12px */
+    padding: 0.8rem 1.2rem !important; /* Match textarea padding */
+    font-weight: 500 !important;
+    align-self: stretch !important; /* Make button full height of row */
+    min-width: 100px !important;
+}
+.input-row .gr-button.primary:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15) !important;
+    background: linear-gradient(135deg, var(--primary-dark), var(--primary)) !important;
+}
+.input-row .gr-button.primary:active {
+    transform: translateY(0) !important;
 }
 
-/* Mobile responsiveness: stack input row */
+/* Clear Button */
+.clear-button-row {
+    justify-content: center !important;
+    margin-top: 1.5rem !important;
+    padding-bottom: 0.5rem !important; /* Add padding below clear button */
+}
+.clear-button-row .gr-button {
+    background: rgba(0, 0, 0, 0.03) !important; /* Very subtle background */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important; /* Subtle border */
+    color: var(--text-light) !important; /* Light gray text for clear button */
+    border-radius: 0.75rem !important; /* 12px */
+    padding: 0.5rem 1rem !important;
+    font-size: 0.9rem !important;
+    font-weight: 500 !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+    transition: all 0.3s ease !important;
+}
+.clear-button-row .gr-button:hover {
+    background: rgba(0, 0, 0, 0.06) !important; /* Slightly darker on hover */
+    border-color: rgba(0, 0, 0, 0.12) !important;
+    color: var(--text) !important; /* White text on hover */
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Mobile Adjustments */
 @media (max-width: 640px) {
+    .gradio-container {
+        margin: 1rem !important; /* Adjust margin for mobile */
+        padding: 1rem 1.5rem !important; /* Adjust padding for mobile */
+        border-radius: 1rem !important;
+    }
+    .hero-section {
+        padding: 2rem 1rem 1.5rem 1rem !important;
+    }
+    .hero-section h1 { font-size: 1.8rem !important; }
+    .hero-section p { font-size: 1rem !important; }
+    .chat-container { padding: 1rem !important; }
     .input-row {
         flex-direction: column !important;
-        gap: 0.5rem !important; /* Add gap when stacked */
+        gap: 0.5rem !important;
+        align-items: stretch !important;
     }
-    .input-row > * {
-        width: 100% !important; /* Make elements full width when stacked */
+    .input-row .gr-button.primary {
         min-width: unset !important;
+        width: 100% !important;
     }
-    /* Reduce padding on mobile */
-    .gradio-container {
-        padding: 1rem !important;
-    }
-    /* Adjust chatbot height slightly on mobile if needed */
-    /* .chatbot-area { height: 70vh !important; } */
-}
-
-/* Style the clear button */
-.clear-button-row {
-    justify-content: center !important; /* Center the button */
-    margin-top: 0.5rem !important;
+    .chatbot-area .message { max-width: 90% !important; }
 }
 """
 
-def create_modern_demo():
-    """Creates a modern, responsive Gradio Chat Interface."""
+def create_modern_demo() -> gr.Blocks:
+    """
+    Creates the Gradio Blocks UI for the chatbot.
+
+    Returns:
+        gr.Blocks: The configured Gradio Blocks instance.
+    """
 
     # Use a clean, modern theme - REMOVED the faulty .set() call
+    # Update theme to use Inter font primarily and adjust radius
     theme = gr.themes.Soft(
-        primary_hue=gr.themes.colors.blue,
-        secondary_hue=gr.themes.colors.neutral,
-        font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"]
+        primary_hue=gr.themes.colors.indigo, # Match --primary color better
+        secondary_hue=gr.themes.colors.blue,
+        neutral_hue=gr.themes.colors.slate,
+        font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
+        radius_size=gr.themes.sizes.radius_lg # Use larger radius globally from theme
+    ).set(
+        # Override specific theme elements if needed, but CSS is more direct
+        # button_primary_background_fill='*primary', # Example
+        # input_background_fill='*neutral_50' # Example
     )
 
+    # --- UI Layout Definition ---
     with gr.Blocks(theme=theme, css=modern_css, title="Ari E-commerce Assistant", analytics_enabled=False) as demo:
         # State to store the unique session ID for the conversation
         session_state = gr.State(value=generate_new_session_id)
 
-        # Optional: Simple Header
-        with gr.Row():
-             gr.Markdown("# Ari E-commerce Assistant", elem_id="app-title")
-             # Could add logo here if desired: gr.Image(value=BOT_AVATAR, width=40, height=40, show_label=False, container=False)
+        # --- Hero Section --- (Displays title and subtitle)
+        with gr.Column(elem_classes="hero-section"):
+            gr.Markdown("# Ari E-commerce Assistant", elem_id="app-title") # Reusing ID for now, but styled by class
+            gr.Markdown("Your friendly AI-powered helper for all things e-commerce.", elem_id="app-subtitle") # Added subtitle
 
-        # Main Chat Area
-        with gr.Column(elem_classes="chatbot-area"): # Added class for potential targeting
-            chatbot = gr.Chatbot(
-                value=get_initial_chat_history,
-                label="Chat History",
-                bubble_full_width=False,
-                height=600, # Max height constraint
-                avatar_images=(USER_AVATAR, BOT_AVATAR),
-                show_copy_button=True,
-                layout="bubble"
-                # render=False # Only needed if placing it manually later
-            )
+        # --- Main Chat Interface Area --- (Contains Chatbot, Input, Clear Button)
+        with gr.Column(elem_classes="chat-container"):
+            # Chat History Display
+            with gr.Column(elem_classes="chatbot-area"):
+                chatbot = gr.Chatbot(
+                    value=get_initial_chat_history,
+                    label="Chat History",
+                    bubble_full_width=False,
+                    height=600, # Max height constraint
+                    avatar_images=(USER_AVATAR, BOT_AVATAR),
+                    show_copy_button=True,
+                    layout="bubble"
+                    # render=False # Only needed if placing it manually later
+                )
 
-        # Input Area
-        with gr.Row(elem_classes="input-row"): # Added class for targeting
-            msg_textbox = gr.Textbox(
-                placeholder="Type your message...",
-                label="Your Message",
-                show_label=False,
-                scale=5, # Give textbox more space
-                autofocus=True,
-                lines=1,
-                max_lines=5,
-                container=False
-            )
-            submit_button = gr.Button("Send", variant="primary", scale=1) # Send button takes less space
+            # User Input Section
+            with gr.Row(elem_classes="input-row"): # Added class for targeting
+                msg_textbox = gr.Textbox(
+                    placeholder="Type your message...",
+                    label="Your Message",
+                    show_label=False,
+                    scale=5, # Give textbox more space
+                    autofocus=True,
+                    lines=1,
+                    max_lines=5,
+                    container=False
+                )
+                submit_button = gr.Button("Send", variant="primary", scale=1) # Send button takes less space
 
-        # Clear Button Area
-        with gr.Row(elem_classes="clear-button-row"): # Added class for targeting
-            clear_button = gr.Button("🗑️ Clear Conversation", variant="secondary", size="sm")
+            # Conversation Control Buttons
+            with gr.Row(elem_classes="clear-button-row"): # Added class for targeting
+                clear_button = gr.Button("🗑️ Clear Conversation", variant="secondary", size="sm")
 
-
-        # --- Event handlers ---
+        # --- Event Handlers --- (Connects UI elements to backend functions)
 
         # Combine Textbox submit and Button click handlers
         submit_triggers = [msg_textbox.submit, submit_button.click]
@@ -261,18 +516,23 @@ def create_modern_demo():
 
 # --- Launch App ---
 
-def main():
-    """Main function to launch the Gradio app."""
+def main() -> None:
+    """
+    Main function to initialize services and launch the Gradio app.
+    """
+    # Check if core services initialized correctly
     if conversation_manager is None:
-         logger.warning("Conversation Manager failed to initialize. Chatbot will show an error message.")
+         logger.warning("Conversation Manager failed to initialize. Chatbot UI will show an error message.")
 
+    # Create the Gradio interface
     logger.info("Creating Gradio demo...")
     demo = create_modern_demo()
 
-    # Enable queue for handling multiple users/requests gracefully
+    # Enable Gradio queue for handling multiple simultaneous users/requests gracefully
     demo.queue()
 
-    logger.info("Launching Gradio demo...")
+    # Launch the Gradio app server
+    logger.info("Launching Gradio demo server...")
     try:
         demo.launch(
             server_name="0.0.0.0",
